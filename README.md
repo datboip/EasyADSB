@@ -353,7 +353,7 @@ Run `./setup.sh` anytime to access the management menu:
 9) Exit
 ```
 
-![Service Management](screenshots/service-management.png)
+
 *Individual service management menu for granular control*
 
 ### Common Commands
