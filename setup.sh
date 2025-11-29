@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # EasyADSB - Automated ADS-B Multi-Feeder Setup
-# Version: 1.0.0
-# Last Updated: 2025-11-28
+# Version: 1.0.1
+# Last Updated: 2025-11-29
 # 
 # One-command setup for 6 ADS-B flight tracking networks
 # 
@@ -79,7 +79,7 @@ trap handle_interrupt INT TERM
 clear
 echo ""
 echo "════════════════════════════════════════════════════════════════════════════════"
-echo "              EasyADSB Setup v1.0.0 (15-20 mins)"
+echo "              EasyADSB Setup v1.0.1 (15-20 mins)"
 echo "════════════════════════════════════════════════════════════════════════════════"
 echo ""
 
@@ -115,6 +115,8 @@ if [ -f ".env" ]; then
                 RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
                 RADARBOX_SERIAL=$(grep "^RADARBOX_SERIAL=" .env | cut -d'=' -f2)
                 PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
+                ADSB_SDR_SERIAL=$(grep "^ADSB_SDR_SERIAL=" .env | cut -d'=' -f2)
+                ADSB_SDR_PPM=$(grep "^ADSB_SDR_PPM=" .env | cut -d'=' -f2)
                 
                 cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -125,7 +127,9 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    sdrSerial: "${ADSB_SDR_SERIAL:-Auto-detected}",
+    sdrPPM: "${ADSB_SDR_PPM:-0}"
 };
 JSEOF
                 echo -e "${GREEN}✓${NC}"
@@ -170,6 +174,8 @@ JSEOF
                     FR24KEY=$(grep "^FR24KEY=" .env | cut -d'=' -f2)
                     RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
                     PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
+                    ADSB_SDR_SERIAL=$(grep "^ADSB_SDR_SERIAL=" .env | cut -d'=' -f2)
+                    ADSB_SDR_PPM=$(grep "^ADSB_SDR_PPM=" .env | cut -d'=' -f2)
                     
                     cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -180,7 +186,9 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RB_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    sdrSerial: "${ADSB_SDR_SERIAL:-Auto-detected}",
+    sdrPPM: "${ADSB_SDR_PPM:-0}"
 };
 JSEOF
                     echo "✓ Dashboard config updated with serial"
@@ -396,6 +404,8 @@ JSEOF
                                     RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
                                     RADARBOX_SERIAL=$(grep "^RADARBOX_SERIAL=" .env | cut -d'=' -f2)
                                     PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
+                                    ADSB_SDR_SERIAL=$(grep "^ADSB_SDR_SERIAL=" .env | cut -d'=' -f2)
+                                    ADSB_SDR_PPM=$(grep "^ADSB_SDR_PPM=" .env | cut -d'=' -f2)
                                     
                                     cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -406,7 +416,9 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    sdrSerial: "${ADSB_SDR_SERIAL:-Auto-detected}",
+    sdrPPM: "${ADSB_SDR_PPM:-0}"
 };
 JSEOF
                                     echo -e "${GREEN}✓${NC}"
@@ -990,7 +1002,6 @@ if [[ ${HAS_FR24_KEY:-false} == false ]]; then
             echo "  8. Receiver type:     Type: 1  (DVBT Stick = RTL-SDR dongle)"
             echo "  9. Dump1090 args:     [Press ENTER - leave empty]"
             echo " 10. RAW port 30002:    Type: yes"
-            rm -f /tmp/fr24feed.log
             echo " 11. Basestation 30003: Type: yes"
             echo ""
             echo -e "${YELLOW}⚠️  WARNING: Leaving sharing key blank creates a NEW account!${NC}"
@@ -1070,6 +1081,7 @@ if [[ ${HAS_FR24_KEY:-false} == false ]]; then
                 echo "  3. Login with your email to see your station stats"
             fi
             
+            rm -f /tmp/fr24feed.log
             ;;
         2)
             echo ""
@@ -1078,7 +1090,6 @@ if [[ ${HAS_FR24_KEY:-false} == false ]]; then
                 FR24KEY="YOUR-FR24-KEY"
                 echo -e "${YELLOW}⚠ No key entered.${NC}"
             else
-                
                 FR24KEY=$(echo "$FR24KEY" | sed 's/fr24key=//' | sed 's/"//g' | tr -d '\r\n ')
                 echo -e "${GREEN}✓ FR24 key saved${NC}"
             fi
@@ -1193,6 +1204,7 @@ if [[ ${HAS_PA_ID:-false} == false ]]; then
                 
                 rm -f /tmp/piaware.log
                 touch /tmp/piaware.log
+                
                 # Run container in background with output to file
                 docker run --rm --name piaware-temp \
                   --device /dev/bus/usb:/dev/bus/usb \
@@ -1356,7 +1368,9 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    sdrSerial: "${ADSB_SDR_SERIAL:-Auto-detected}",
+    sdrPPM: "${ADSB_SDR_PPM:-0}"
 };
 JSEOF
 echo -e "${GREEN}✓${NC}"
@@ -1411,6 +1425,8 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
             FR24KEY=$(grep "^FR24KEY=" .env | cut -d'=' -f2)
             RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
             PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
+            ADSB_SDR_SERIAL=$(grep "^ADSB_SDR_SERIAL=" .env | cut -d'=' -f2)
+            ADSB_SDR_PPM=$(grep "^ADSB_SDR_PPM=" .env | cut -d'=' -f2)
             
             cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -1421,7 +1437,9 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RB_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    sdrSerial: "${ADSB_SDR_SERIAL:-Auto-detected}",
+    sdrPPM: "${ADSB_SDR_PPM:-0}"
 };
 JSEOF
             echo "✓ Dashboard config updated with serial"

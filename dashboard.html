@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!--
   EasyADSB Dashboard
-  Version: 1.0.0
-  Last Updated: 2025-11-28
+  Version: 1.0.1
+  Last Updated: 2025-11-29
   
   An automated multi-feeder setup for ADS-B enthusiasts
   
@@ -482,10 +482,19 @@
             }
             
             /* Stack ID boxes on mobile */
-            .card div[style*="grid-template-columns: repeat(3, 1fr)"] {
+            .station-ids-grid {
                 grid-template-columns: 1fr !important;
             }
         }
+        
+        /* Tablet: 2 columns */
+        @media (min-width: 481px) and (max-width: 768px) {
+            .station-ids-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+        
+        /* Desktop: 4 columns (default in inline style) */
 
         .controls-panel {
             grid-column: 1 / -1;
@@ -801,7 +810,7 @@
                     </div>
                     <div class="card-links">
                         <button onclick="openPiawareStats()" class="card-link">My Stats</button>
-                        <button onclick="openCoverageLink('piaware')" class="card-link secondary">My Site</button>
+                        <a href="https://www.flightaware.com/live/map" target="_blank" class="card-link secondary">SkyAware Map</a>
                     </div>
                 </div>
             </div>
@@ -841,8 +850,7 @@
                 <div class="card-content">
                     Aviation data platform.
                     <div class="card-links">
-                        <a href="https://www.radarbox.com/stations" target="_blank" class="card-link">My Stations</a>
-                        <button onclick="openCoverageLink('radarbox')" class="card-link secondary">My Station</button>
+                        <button onclick="openRadarBoxStation()" class="card-link">My Station</button>
                     </div>
                 </div>
             </div>
@@ -898,7 +906,7 @@
             <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 15px;">
                 Keep these handy for linking accounts and troubleshooting
             </div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;" class="station-ids-grid">
                 <div class="id-box">
                     <div class="id-label">ADSBexchange UUID</div>
                     <div style="display: flex; align-items: center; gap: 8px;">
@@ -941,12 +949,26 @@
                         <button class="copy-btn" onclick="copyToClipboard('ref-piaware')" title="Copy to clipboard">📋</button>
                     </div>
                 </div>
+                <div class="id-box">
+                    <div class="id-label">SDR Serial</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="id-value" id="ref-sdr-serial">-</div>
+                        <button class="copy-btn" onclick="copyToClipboard('ref-sdr-serial')" title="Copy to clipboard">📋</button>
+                    </div>
+                </div>
+                <div class="id-box">
+                    <div class="id-label">SDR PPM</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="id-value" id="ref-sdr-ppm">-</div>
+                        <button class="copy-btn" onclick="copyToClipboard('ref-sdr-ppm')" title="Copy to clipboard">📋</button>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Version Footer -->
         <div class="footer">
-            EasyADSB v1.0.0 | 
+            EasyADSB v1.0.1 | 
             <a href="https://github.com/datboip/easyadsb" target="_blank">⭐ GitHub</a> | 
             Built with <a href="https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder" target="_blank">ultrafeeder</a>
         </div>
@@ -1033,21 +1055,51 @@
                 return; // Don't copy placeholder text
             }
             
-            navigator.clipboard.writeText(text).then(() => {
-                // Visual feedback
-                const btn = element.parentElement.querySelector('.copy-btn');
-                const originalText = btn.textContent;
-                btn.textContent = '✓';
-                btn.style.background = '#10b981';
-                
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.style.background = '';
-                }, 1500);
-            }).catch(err => {
+            // Try modern clipboard API first
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showCopyFeedback(element);
+                }).catch(err => {
+                    // Fallback if clipboard API fails
+                    fallbackCopy(text, element);
+                });
+            } else {
+                // Fallback for non-HTTPS or older browsers
+                fallbackCopy(text, element);
+            }
+        }
+        
+        // Fallback copy method using textarea
+        function fallbackCopy(text, element) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                showCopyFeedback(element);
+            } catch (err) {
                 console.error('Failed to copy:', err);
-                alert('Failed to copy to clipboard');
-            });
+                alert('Failed to copy to clipboard. Text: ' + text);
+            }
+            
+            document.body.removeChild(textarea);
+        }
+        
+        // Show copy success feedback
+        function showCopyFeedback(element) {
+            const btn = element.parentElement.querySelector('.copy-btn');
+            const originalText = btn.textContent;
+            btn.textContent = '✓';
+            btn.style.background = '#10b981';
+            
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.background = '';
+            }, 1500);
         }
 
         // Copy all IDs to clipboard
@@ -1058,7 +1110,9 @@
                 'RadarBox Key': document.getElementById('ref-rb-key').textContent,
                 'RadarBox Serial': document.getElementById('ref-rb-serial').textContent,
                 'FlightRadar24 Key': document.getElementById('ref-fr24').textContent,
-                'PiAware ID': document.getElementById('ref-piaware').textContent
+                'PiAware ID': document.getElementById('ref-piaware').textContent,
+                'SDR Serial': document.getElementById('ref-sdr-serial').textContent,
+                'SDR PPM': document.getElementById('ref-sdr-ppm').textContent
             };
             
             let text = 'EasyADSB Station IDs:\n\n';
@@ -1068,12 +1122,36 @@
                 }
             }
             
-            navigator.clipboard.writeText(text).then(() => {
+            // Use fallback copy method for compatibility
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('✓ All IDs copied to clipboard!');
+                }).catch(err => {
+                    fallbackCopyAll(text);
+                });
+            } else {
+                fallbackCopyAll(text);
+            }
+        }
+        
+        // Fallback for copying all IDs
+        function fallbackCopyAll(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
                 alert('✓ All IDs copied to clipboard!');
-            }).catch(err => {
+            } catch (err) {
                 console.error('Failed to copy:', err);
                 alert('Failed to copy to clipboard');
-            });
+            }
+            
+            document.body.removeChild(textarea);
         }
 
         // Detect hostname and build tar1090 URL
@@ -1169,25 +1247,24 @@
                         window.open(`https://flightaware.com/adsb/stats/user/${key}`, '_blank');
                     }
                     break;
-                    
-                case 'radarbox':
-                    let serial = config.radarboxSerial;
-                    
-                    // If no serial, ask for it or show instructions
-                    if (!serial || serial === '' || serial === 'YOUR-RADARBOX-KEY') {
-                        serial = prompt('Enter your RadarBox station serial:\n\n(Find in docker logs: docker compose logs radarbox | grep "serial number")');
-                        if (serial) {
-                            config.radarboxSerial = serial;
-                            localStorage.setItem('adsbConfig', JSON.stringify(config));
-                        }
-                    }
-                    
-                    if (serial && serial !== '' && serial !== 'YOUR-RADARBOX-KEY') {
-                        window.open(`https://www.radarbox.com/stations/${serial}`, '_blank');
-                    } else {
-                        alert('RadarBox serial not available yet.\n\nThe serial is generated when you first connect.\nCheck logs: docker compose logs radarbox | grep "serial number"');
-                    }
-                    break;
+            }
+        }
+        
+        // RadarBox station link using serial
+        function openRadarBoxStation() {
+            let serial = config.radarboxSerial;
+            
+            if (!serial || serial === '' || serial === 'YOUR-RADARBOX-SERIAL') {
+                serial = prompt('Enter your RadarBox station serial:\n\n(Find in Station IDs section below or in logs: docker compose logs radarbox | grep "serial")');
+                if (serial) {
+                    config.radarboxSerial = serial;
+                    localStorage.setItem('adsbConfig', JSON.stringify(config));
+                    document.getElementById('ref-rb-serial').textContent = serial;
+                }
+            }
+            
+            if (serial && serial !== 'YOUR-RADARBOX-SERIAL') {
+                window.open(`https://www.radarbox.com/stations/${serial}`, '_blank');
             }
         }
 
@@ -1307,6 +1384,10 @@
             
             document.getElementById('ref-fr24').textContent = config.fr24Key || 'Not configured';
             document.getElementById('ref-piaware').textContent = config.piawareID || 'Not configured';
+            
+            // SDR Serial and PPM
+            document.getElementById('ref-sdr-serial').textContent = config.sdrSerial || 'Auto-detected';
+            document.getElementById('ref-sdr-ppm').textContent = config.sdrPPM || '0';
         }
 
         // Update recent aircraft list
