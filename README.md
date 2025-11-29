@@ -98,7 +98,6 @@ chmod +x setup.sh
 
 ![Setup Script Menu](screenshots/setup-menu.png)
 
-*Interactive setup menu - choose option 2 for first-time setup*
 
 ### Step 4: Follow the Interactive Wizard
 
