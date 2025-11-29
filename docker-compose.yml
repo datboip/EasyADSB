@@ -1,0 +1,109 @@
+# EasyADSB - Docker Compose Configuration
+# Version: 1.0.0
+# Last Updated: 2025-11-28
+#
+# Services: ultrafeeder, flightradar24, radarbox, piaware, dashboard
+# Credits: sdr-enthusiasts for the amazing feeder containers
+
+services:
+  ultrafeeder:
+    image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest
+    container_name: ultrafeeder
+    hostname: ultrafeeder
+    restart: unless-stopped
+    device_cgroup_rules:
+      - "c 189:* rwm"
+    ports:
+      - 8080:80
+      - 30001:30001
+      - 30002:30002
+      - 30003:30003
+      - 30004:30004
+      - 30005:30005
+      - 30006:30006
+    environment:
+      - LOGLEVEL=verbose
+      - TZ=${FEEDER_TZ}
+      # RTL-SDR
+      - READSB_DEVICE_TYPE=rtlsdr
+      - READSB_GAIN=autogain
+      - READSB_RTLSDR_DEVICE=${ADSB_SDR_SERIAL}
+      - READSB_RTLSDR_PPM=${ADSB_SDR_PPM}
+      # Location
+      - READSB_LAT=${FEEDER_LAT}
+      - READSB_LON=${FEEDER_LONG}
+      - READSB_ALT=${FEEDER_ALT_M}m
+      - READSB_RX_LOCATION_ACCURACY=2
+      - READSB_STATS_RANGE=true
+      # Outputs
+      - ULTRAFEEDER_CONFIG=${ULTRAFEEDER_CONFIG}
+      # MLAT identity
+      - UUID=${MULTIFEEDER_UUID}
+      - MLAT_USER=${FEEDER_NAME}
+    volumes:
+      - /opt/adsb/ultrafeeder/globe_history:/var/globe_history
+      - /opt/adsb/ultrafeeder/graphs1090:/var/lib/collectd
+      - /proc/diskstats:/proc/diskstats:ro
+      - /dev/bus/usb:/dev/bus/usb
+    tmpfs:
+      - /run:exec,size=256M
+      - /tmp:size=128M
+      - /var/log:size=32M
+  
+  dashboard:
+    image: nginx:alpine
+    container_name: adsb-dashboard
+    restart: unless-stopped
+    ports:
+      - 8081:80
+    volumes:
+      - ./dashboard.html:/usr/share/nginx/html/index.html:ro
+      - ./dashboard-config.js:/usr/share/nginx/html/dashboard-config.js:ro
+    depends_on:
+      - ultrafeeder
+      
+  radarbox:
+    image: ghcr.io/sdr-enthusiasts/docker-radarbox:latest
+    container_name: radarbox
+    restart: unless-stopped
+    depends_on:
+      - ultrafeeder
+    environment:
+      - TZ=${FEEDER_TZ}
+      - LAT=${FEEDER_LAT}
+      - LONG=${FEEDER_LONG}
+      - ALT=${FEEDER_ALT_M}
+      - SHARING_KEY=${RADARBOX_KEY}
+      - RB_SERVER=true
+      - BEASTHOST=ultrafeeder
+      - BEASTPORT=30005
+      - RBFEEDER_TIMEOUT=300
+      
+  piaware:
+    image: ghcr.io/sdr-enthusiasts/docker-piaware:latest
+    container_name: piaware
+    restart: unless-stopped
+    depends_on:
+      - ultrafeeder
+    environment:
+      - BEASTHOST=ultrafeeder
+      - BEASTPORT=30005
+      - LAT=${FEEDER_LAT}
+      - LONG=${FEEDER_LONG}
+      - ALT=${FEEDER_ALT_M}
+      - FEEDER_ID=${PIAWARE_FEEDER_ID}
+      - TZ=${FEEDER_TZ}
+  
+  flightradar24:
+    image: ghcr.io/sdr-enthusiasts/docker-flightradar24:latest
+    container_name: flightradar24
+    restart: unless-stopped
+    depends_on:
+      - ultrafeeder
+    ports:
+      - 8754:8754
+    environment:
+      - BEASTHOST=ultrafeeder
+      - BEASTPORT=30005
+      - TZ=${FEEDER_TZ}
+      - FR24KEY=${FR24KEY}
