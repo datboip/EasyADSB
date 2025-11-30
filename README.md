@@ -7,7 +7,6 @@ One command. 15-20 minutes. Six flight tracking networks. Zero headaches.
 ---
 
 ![Dashboard Preview](screenshots/dashboard-hero.png)
-
 *EasyADSB Dashboard - Track aircraft in real-time with live stats and maps*
 
 ---
@@ -31,10 +30,12 @@ EasyADSB is an **all-in-one automated setup script** that turns your Raspberry P
 
 - ✅ **One-Command Setup** - Run `./setup.sh` and follow the prompts
 - ✅ **Auto-Configuration** - Automatically generates keys and IDs for all services
+- ✅ **Auto-Update** - Pull latest updates from GitHub (NEW!)
 - ✅ **Web Dashboard** - Modern interface with live aircraft tracking
 - ✅ **Dark Mode** - Easy on the eyes, looks great
 - ✅ **Real-Time Stats** - Aircraft count, message rate, max range
 - ✅ **Mobile Responsive** - Works on phone, tablet, desktop
+- ✅ **Easy Uninstall** - Remove everything cleanly (NEW!)
 - ✅ **Zero Manual Config** - No editing config files (unless you want to)
 
 ---
@@ -97,7 +98,7 @@ chmod +x setup.sh
 ```
 
 ![Setup Script Menu](screenshots/setup-menu.png)
-
+*Interactive setup menu - choose option 2 for first-time setup*
 
 ### Step 4: Follow the Interactive Wizard
 
@@ -123,6 +124,7 @@ The script will guide you through:
    - Dashboard becomes available
 
 ![Setup Progress](screenshots/setup-progress.png)
+*Setup script with progress spinners and clear status messages*
 
 ### Step 5: Access Your Dashboard
 
@@ -137,11 +139,9 @@ hostname -I
 ```
 
 ![Dashboard Light Mode](screenshots/dashboard-light.png)
-
 *Dashboard in light mode - clean, modern interface*
 
 ![Dashboard Dark Mode](screenshots/dashboard-dark.png)
-
 *Dashboard in dark mode - easy on the eyes for nighttime viewing*
 
 ---
@@ -154,7 +154,6 @@ hostname -I
 - **Interactive Map** - Embedded tar1090 map showing all aircraft
 
 ![Recent Aircraft](screenshots/recent-aircraft.png)
-
 *Live aircraft list with real-time updates*
 
 ### Quick Stats
@@ -168,7 +167,6 @@ hostname -I
 - **Station IDs** - All your UUIDs and keys with copy buttons
 
 ![Station IDs](screenshots/station-ids.png)
-
 *Easy access to all your station IDs with copy-to-clipboard buttons*
 
 ### Dark Mode
@@ -338,21 +336,60 @@ Run `./setup.sh` anytime to access the management menu:
 
 ```
 ════════════════════════════════════════════
-  EasyADSB Setup v1.0.0 (15-20 mins)
+  EasyADSB Management Menu
 ════════════════════════════════════════════
 
-1) Restart Services
-2) First-Time Setup
-3) View Logs (All Services)
-4) View Logs (Individual Service)
-5) Update Docker Images
-6) View Configuration
-7) Reconfigure Services
-8) Individual Service Management
+1) Restart all services
+2) View logs (all services)
+3) View logs (individual service)
+4) Update Docker images
+5) View current configuration
+6) Reconfigure everything (fresh setup)
+7) Update EasyADSB (pull from GitHub)
+8) Uninstall EasyADSB
 9) Exit
 ```
 
+### Update EasyADSB
 
+Keep your installation up to date:
+
+```bash
+./setup.sh
+# Choose option 7 (Update EasyADSB)
+```
+
+**What it does:**
+- Pulls latest code from GitHub
+- Backs up your .env file
+- Regenerates dashboard config
+- Restarts services with new code
+- Preserves all your credentials
+
+### Uninstall EasyADSB
+
+Remove EasyADSB completely:
+
+```bash
+./setup.sh
+# Choose option 8 (Uninstall)
+```
+
+**What it removes:**
+- All Docker containers
+- Optionally: data volumes (/opt/adsb)
+- Optionally: config files (.env)
+- Does NOT remove: setup files (you can delete manually)
+
+**Complete removal:**
+```bash
+cd ~/easyadsb
+./setup.sh  # Choose option 8
+cd ..
+rm -rf easyadsb
+```
+
+![Service Management](screenshots/service-management.png)
 *Individual service management menu for granular control*
 
 ### Common Commands

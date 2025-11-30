@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # EasyADSB - Automated ADS-B Multi-Feeder Setup
-# Version: 1.0.1
+# Version: 1.1.0
 # Last Updated: 2025-11-29
 # 
 # One-command setup for 6 ADS-B flight tracking networks
@@ -79,7 +79,7 @@ trap handle_interrupt INT TERM
 clear
 echo ""
 echo "════════════════════════════════════════════════════════════════════════════════"
-echo "              EasyADSB Setup v1.0.1 (15-20 mins)"
+echo "              EasyADSB Setup v1.1.0 (15-20 mins)"
 echo "════════════════════════════════════════════════════════════════════════════════"
 echo ""
 
@@ -115,8 +115,6 @@ if [ -f ".env" ]; then
                 RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
                 RADARBOX_SERIAL=$(grep "^RADARBOX_SERIAL=" .env | cut -d'=' -f2)
                 PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
-                ADSB_SDR_SERIAL=$(grep "^ADSB_SDR_SERIAL=" .env | cut -d'=' -f2)
-                ADSB_SDR_PPM=$(grep "^ADSB_SDR_PPM=" .env | cut -d'=' -f2)
                 
                 cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -127,9 +125,7 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}",
-    sdrSerial: "${ADSB_SDR_SERIAL:-Auto-detected}",
-    sdrPPM: "${ADSB_SDR_PPM:-0}"
+    piawareID: "${PIAWARE_FEEDER_ID}"
 };
 JSEOF
                 echo -e "${GREEN}✓${NC}"
@@ -174,8 +170,6 @@ JSEOF
                     FR24KEY=$(grep "^FR24KEY=" .env | cut -d'=' -f2)
                     RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
                     PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
-                    ADSB_SDR_SERIAL=$(grep "^ADSB_SDR_SERIAL=" .env | cut -d'=' -f2)
-                    ADSB_SDR_PPM=$(grep "^ADSB_SDR_PPM=" .env | cut -d'=' -f2)
                     
                     cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -186,9 +180,7 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RB_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}",
-    sdrSerial: "${ADSB_SDR_SERIAL:-Auto-detected}",
-    sdrPPM: "${ADSB_SDR_PPM:-0}"
+    piawareID: "${PIAWARE_FEEDER_ID}"
 };
 JSEOF
                     echo "✓ Dashboard config updated with serial"
@@ -404,8 +396,6 @@ JSEOF
                                     RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
                                     RADARBOX_SERIAL=$(grep "^RADARBOX_SERIAL=" .env | cut -d'=' -f2)
                                     PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
-                                    ADSB_SDR_SERIAL=$(grep "^ADSB_SDR_SERIAL=" .env | cut -d'=' -f2)
-                                    ADSB_SDR_PPM=$(grep "^ADSB_SDR_PPM=" .env | cut -d'=' -f2)
                                     
                                     cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -416,9 +406,7 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}",
-    sdrSerial: "${ADSB_SDR_SERIAL:-Auto-detected}",
-    sdrPPM: "${ADSB_SDR_PPM:-0}"
+    piawareID: "${PIAWARE_FEEDER_ID}"
 };
 JSEOF
                                     echo -e "${GREEN}✓${NC}"
@@ -585,9 +573,11 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "  4) Update Docker images"
     echo "  5) View current configuration"
     echo "  6) Reconfigure everything (fresh setup)"
-    echo "  7) Exit"
+    echo "  7) Update EasyADSB (pull from GitHub)"
+    echo "  8) Uninstall EasyADSB"
+    echo "  9) Exit"
     echo ""
-    read -p "Choice [1-7]: " menu_choice
+    read -p "Choice [1-9]: " menu_choice
     
     case $menu_choice in
         1)
@@ -648,6 +638,140 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             # Continue to setup below
             ;;
         7)
+            # Update EasyADSB from GitHub
+            echo ""
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo "  Update EasyADSB"
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo ""
+            
+            if [ ! -d ".git" ]; then
+                echo -e "${RED}✗${NC} Not a git repository"
+                echo "  This directory was not cloned from GitHub."
+                echo "  Manual update required - download latest files from:"
+                echo "  https://github.com/datboip/EasyADSB"
+                exit 1
+            fi
+            
+            echo "Checking for updates..."
+            git fetch origin main
+            
+            LOCAL=$(git rev-parse @)
+            REMOTE=$(git rev-parse @{u})
+            
+            if [ $LOCAL = $REMOTE ]; then
+                echo ""
+                echo "✓ Already up to date!"
+                exit 0
+            fi
+            
+            echo ""
+            echo "Updates available!"
+            git log --oneline HEAD..origin/main | head -5
+            echo ""
+            read -p "Pull updates and restart? (y/n): " -n 1 -r
+            echo ""
+            
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                # Backup current .env
+                if [ -f ".env" ]; then
+                    cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+                    echo "✓ Backed up .env"
+                fi
+                
+                # Pull updates
+                echo "Pulling updates..."
+                git pull origin main
+                echo ""
+                
+                # Check if setup.sh changed
+                if git diff HEAD@{1} HEAD --name-only | grep -q "setup.sh"; then
+                    echo -e "${YELLOW}⚠${NC} setup.sh was updated"
+                    echo "  Run ./setup.sh again to apply changes"
+                fi
+                
+                # Check if .env.example has new fields
+                if git diff HEAD@{1} HEAD --name-only | grep -q ".env.example"; then
+                    echo -e "${YELLOW}⚠${NC} New configuration options available"
+                    echo "  Check .env.example for new fields"
+                fi
+                
+                # Regenerate dashboard config
+                if [ -f ".env" ]; then
+                    echo ""
+                    echo "Regenerating dashboard config..."
+                    source .env
+                    cat > dashboard-config.js << JSEOF
+// Auto-generated configuration for EasyADSB Dashboard
+// Generated: $(date)
+window.FEEDER_CONFIG = {
+    adsbxUUID: "${ADSBX_UUID}",
+    adsbLolUUID: "${MULTIFEEDER_UUID}",
+    fr24Key: "${FR24KEY}",
+    radarboxKey: "${RADARBOX_KEY}",
+    radarboxSerial: "${RADARBOX_SERIAL}",
+    piawareID: "${PIAWARE_FEEDER_ID}"
+};
+JSEOF
+                    echo "✓ Dashboard config updated"
+                fi
+                
+                # Restart services
+                echo ""
+                echo "Restarting services..."
+                docker compose pull
+                docker compose up -d
+                echo ""
+                echo "✓ Update complete!"
+                echo "  Dashboard: http://$(hostname -I | awk '{print $1}'):8081"
+            fi
+            exit 0
+            ;;
+        8)
+            # Uninstall EasyADSB
+            echo ""
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo "  Uninstall EasyADSB"
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo ""
+            echo -e "${RED}⚠ WARNING:${NC} This will remove all EasyADSB containers and data!"
+            echo ""
+            read -p "Are you sure you want to uninstall? (yes/no): " confirm
+            
+            if [ "$confirm" != "yes" ]; then
+                echo "Cancelled."
+                exit 0
+            fi
+            
+            echo ""
+            echo "Stopping and removing containers..."
+            docker compose down
+            echo "✓ Containers removed"
+            
+            echo ""
+            read -p "Remove data volumes? (/opt/adsb) (y/n): " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                sudo rm -rf /opt/adsb
+                echo "✓ Data volumes removed"
+            fi
+            
+            echo ""
+            read -p "Remove configuration files? (.env, dashboard-config.js) (y/n): " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                rm -f .env .env.backup.* dashboard-config.js
+                echo "✓ Configuration files removed"
+            fi
+            
+            echo ""
+            echo "✓ Uninstall complete!"
+            echo ""
+            echo "To remove EasyADSB completely:"
+            echo "  cd .. && rm -rf easyadsb"
+            exit 0
+            ;;
+        9)
             exit 0
             ;;
         *)
@@ -1335,7 +1459,7 @@ echo -n "Creating configuration... "
 cat > .env << EOF
 # EasyADSB Configuration
 # Generated on $(date)
-# https://github.com/yourusername/easyadsb
+# https://github.com/datboip/easyadsb
 
 FEEDER_TZ=$FEEDER_TZ
 FEEDER_LAT=$FEEDER_LAT
@@ -1353,7 +1477,7 @@ RADARBOX_KEY=$RADARBOX_KEY
 RADARBOX_SERIAL=$RADARBOX_SERIAL
 PIAWARE_FEEDER_ID=$PIAWARE_FEEDER_ID
 
-ULTRAFEEDER_CONFIG=adsb,feed.flightradar24.com,30004,beast_reduce_plus_out,uuid=\${FR24KEY};adsb,feed.adsbexchange.com,30004,beast_reduce_plus_out,uuid=\${ADSBX_UUID};mlat,in.adsb.lol,31090,uuid=\${MULTIFEEDER_UUID}
+ULTRAFEEDER_CONFIG=adsb,feed.flightradar24.com,30004,beast_reduce_plus_out,uuid=${FR24KEY};adsb,feed.adsbexchange.com,30004,beast_reduce_plus_out,uuid=${ADSBX_UUID};mlat,in.adsb.lol,31090,uuid=${MULTIFEEDER_UUID}
 EOF
 
 echo -e "${GREEN}✓${NC}"
@@ -1368,9 +1492,7 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}",
-    sdrSerial: "${ADSB_SDR_SERIAL:-Auto-detected}",
-    sdrPPM: "${ADSB_SDR_PPM:-0}"
+    piawareID: "${PIAWARE_FEEDER_ID}"
 };
 JSEOF
 echo -e "${GREEN}✓${NC}"
@@ -1380,6 +1502,27 @@ echo ""
 read -p "Start all feeders now? (y/n): " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
+    # Check for existing containers
+    EXISTING_CONTAINERS=$(docker ps -a --filter "name=ultrafeeder\|adsb-dashboard\|radarbox\|piaware\|flightradar24" --format "{{.Names}}" 2>/dev/null)
+    
+    if [ ! -z "$EXISTING_CONTAINERS" ]; then
+        echo ""
+        echo -e "${YELLOW}⚠${NC} Found existing EasyADSB containers:"
+        echo "$EXISTING_CONTAINERS" | sed 's/^/  - /'
+        echo ""
+        read -p "Stop and remove these containers? (y/n): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            spin "Cleaning up old containers" &
+            SPIN_PID=$!
+            docker compose down 2>/dev/null
+            stop_spin
+            echo -e "${GREEN}✓${NC} Old containers removed"
+        else
+            echo -e "${YELLOW}Note:${NC} Existing containers may conflict with new setup"
+        fi
+    fi
+    
     spin "Pulling latest images" &
     SPIN_PID=$!
     docker compose pull
@@ -1425,8 +1568,6 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
             FR24KEY=$(grep "^FR24KEY=" .env | cut -d'=' -f2)
             RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
             PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
-            ADSB_SDR_SERIAL=$(grep "^ADSB_SDR_SERIAL=" .env | cut -d'=' -f2)
-            ADSB_SDR_PPM=$(grep "^ADSB_SDR_PPM=" .env | cut -d'=' -f2)
             
             cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -1437,9 +1578,7 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RB_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}",
-    sdrSerial: "${ADSB_SDR_SERIAL:-Auto-detected}",
-    sdrPPM: "${ADSB_SDR_PPM:-0}"
+    piawareID: "${PIAWARE_FEEDER_ID}"
 };
 JSEOF
             echo "✓ Dashboard config updated with serial"

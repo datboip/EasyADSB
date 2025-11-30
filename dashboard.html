@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   EasyADSB Dashboard
-  Version: 1.0.1
+  Version: 1.1.0
   Last Updated: 2025-11-29
   
   An automated multi-feeder setup for ADS-B enthusiasts
@@ -494,7 +494,7 @@
             }
         }
         
-        /* Desktop: 4 columns (default in inline style) */
+        /* Desktop: 3 columns (default in inline style) */
 
         .controls-panel {
             grid-column: 1 / -1;
@@ -906,7 +906,7 @@
             <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 15px;">
                 Keep these handy for linking accounts and troubleshooting
             </div>
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;" class="station-ids-grid">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;" class="station-ids-grid">
                 <div class="id-box">
                     <div class="id-label">ADSBexchange UUID</div>
                     <div style="display: flex; align-items: center; gap: 8px;">
@@ -949,26 +949,12 @@
                         <button class="copy-btn" onclick="copyToClipboard('ref-piaware')" title="Copy to clipboard">📋</button>
                     </div>
                 </div>
-                <div class="id-box">
-                    <div class="id-label">SDR Serial</div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div class="id-value" id="ref-sdr-serial">-</div>
-                        <button class="copy-btn" onclick="copyToClipboard('ref-sdr-serial')" title="Copy to clipboard">📋</button>
-                    </div>
-                </div>
-                <div class="id-box">
-                    <div class="id-label">SDR PPM</div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div class="id-value" id="ref-sdr-ppm">-</div>
-                        <button class="copy-btn" onclick="copyToClipboard('ref-sdr-ppm')" title="Copy to clipboard">📋</button>
-                    </div>
-                </div>
             </div>
         </div>
 
         <!-- Version Footer -->
         <div class="footer">
-            EasyADSB v1.0.1 | 
+            EasyADSB v1.1.0 | 
             <a href="https://github.com/datboip/easyadsb" target="_blank">⭐ GitHub</a> | 
             Built with <a href="https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder" target="_blank">ultrafeeder</a>
         </div>
@@ -1110,9 +1096,7 @@
                 'RadarBox Key': document.getElementById('ref-rb-key').textContent,
                 'RadarBox Serial': document.getElementById('ref-rb-serial').textContent,
                 'FlightRadar24 Key': document.getElementById('ref-fr24').textContent,
-                'PiAware ID': document.getElementById('ref-piaware').textContent,
-                'SDR Serial': document.getElementById('ref-sdr-serial').textContent,
-                'SDR PPM': document.getElementById('ref-sdr-ppm').textContent
+                'PiAware ID': document.getElementById('ref-piaware').textContent
             };
             
             let text = 'EasyADSB Station IDs:\n\n';
@@ -1384,10 +1368,6 @@
             
             document.getElementById('ref-fr24').textContent = config.fr24Key || 'Not configured';
             document.getElementById('ref-piaware').textContent = config.piawareID || 'Not configured';
-            
-            // SDR Serial and PPM
-            document.getElementById('ref-sdr-serial').textContent = config.sdrSerial || 'Auto-detected';
-            document.getElementById('ref-sdr-ppm').textContent = config.sdrPPM || '0';
         }
 
         // Update recent aircraft list
