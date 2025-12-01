@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # EasyADSB - Automated ADS-B Multi-Feeder Setup
-# Version: 1.1.0
-# Last Updated: 2025-11-29
+# Version: 1.2.0
+# Last Updated: 2025-11-30
 # 
 # One-command setup for 6 ADS-B flight tracking networks
 # 
@@ -11,6 +11,7 @@
 # - Guided interactive FR24 signup (shows ACTUAL questions!)
 # - One-command setup with smart defaults
 # - Unified dashboard with real-time stats
+# - Flight logger with export capabilities
 # - Easy reconfiguration without losing data
 # 
 # What we use:
@@ -52,7 +53,7 @@ stop_spin() {
     if [ -n "$SPIN_PID" ]; then
         kill "$SPIN_PID" 2>/dev/null || true
         wait "$SPIN_PID" 2>/dev/null || true
-        printf "\r"
+        printf "\r\033[K"  # Return to start and clear line
         SPIN_PID=""
     fi
 }
@@ -76,25 +77,52 @@ handle_interrupt() {
 trap cleanup EXIT
 trap handle_interrupt INT TERM
 
+# Check if a port is available
+check_port() {
+    local port=$1
+    if command -v netstat &> /dev/null; then
+        netstat -tuln 2>/dev/null | grep -q ":${port} " && return 1
+    elif command -v ss &> /dev/null; then
+        ss -tuln 2>/dev/null | grep -q ":${port} " && return 1
+    fi
+    return 0
+}
+
+# Find available port starting from given port
+find_available_port() {
+    local port=$1
+    local max_tries=10
+    local tries=0
+    while ! check_port $port && [ $tries -lt $max_tries ]; do
+        port=$((port + 1))
+        tries=$((tries + 1))
+    done
+    echo $port
+}
+
 clear
 echo ""
 echo "════════════════════════════════════════════════════════════════════════════════"
-echo "              EasyADSB Setup v1.1.0 (15-20 mins)"
+echo "              EasyADSB Setup v1.2.0 (15-20 mins)"
 echo "════════════════════════════════════════════════════════════════════════════════"
 echo ""
 
 # Check for existing .env
 if [ -f ".env" ]; then
-    echo "Found existing .env file."
+    echo -e "${GREEN}✓${NC} Found existing .env file."
     echo ""
-    echo "Options:"
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    echo ""
     echo "  1) Restart services (keep config)"
     echo "  2) Reconfigure everything"
     echo "  3) Stop all services"
     echo "  4) View status & logs"
-    echo "  5) Exit"
+    echo "  5) Backup / Restore"
+    echo "  6) Update EasyADSB (pull from GitHub)"
+    echo "  7) Uninstall EasyADSB"
+    echo "  8) Exit"
     echo ""
-    read -p "Choice [1-5]: " choice
+    read -p "Choice [1-8]: " choice
     
     case $choice in
         1)
@@ -115,6 +143,8 @@ if [ -f ".env" ]; then
                 RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
                 RADARBOX_SERIAL=$(grep "^RADARBOX_SERIAL=" .env | cut -d'=' -f2)
                 PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
+                LOGGER_PORT=$(grep "^LOGGER_PORT=" .env | cut -d'=' -f2)
+                LOGGER_PORT=${LOGGER_PORT:-8082}
                 
                 cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -125,21 +155,29 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    loggerPort: ${LOGGER_PORT}
 };
 JSEOF
                 echo -e "${GREEN}✓${NC}"
             fi
             
+            # Check if logger is enabled
+            LOG_ENABLED=$(grep "^LOG_ENABLED=" .env 2>/dev/null | cut -d'=' -f2)
+            
             spin "Stopping services" &
             SPIN_PID=$!
-            docker compose down > /dev/null 2>&1
+            docker compose --profile logging down > /dev/null 2>&1
             stop_spin
             echo -e "${GREEN}✓${NC} Stopping services"
             
             spin "Starting services" &
             SPIN_PID=$!
-            docker compose up -d > /dev/null 2>&1
+            if [ "$LOG_ENABLED" = "true" ] && [ -d "logger" ]; then
+                docker compose --profile logging up -d > /dev/null 2>&1
+            else
+                docker compose up -d > /dev/null 2>&1
+            fi
             stop_spin
             echo -e "${GREEN}✓${NC} Starting services"
             
@@ -170,6 +208,8 @@ JSEOF
                     FR24KEY=$(grep "^FR24KEY=" .env | cut -d'=' -f2)
                     RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
                     PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
+                    LOGGER_PORT=$(grep "^LOGGER_PORT=" .env | cut -d'=' -f2)
+                    LOGGER_PORT=${LOGGER_PORT:-8082}
                     
                     cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -180,7 +220,8 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RB_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    loggerPort: ${LOGGER_PORT}
 };
 JSEOF
                     echo "✓ Dashboard config updated with serial"
@@ -215,6 +256,7 @@ JSEOF
                 OLD_ADSBX=$(grep "^ADSBX_UUID=" .env | cut -d'=' -f2)
                 OLD_MULTI=$(grep "^MULTIFEEDER_UUID=" .env | cut -d'=' -f2)
                 OLD_RB=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
+                OLD_RB_SERIAL=$(grep "^RADARBOX_SERIAL=" .env | cut -d'=' -f2)
                 OLD_FR24=$(grep "^FR24KEY=" .env | cut -d'=' -f2)
                 OLD_PA=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
             fi
@@ -230,7 +272,7 @@ JSEOF
             echo "  Stopping All Services"
             echo "════════════════════════════════════════════════════════════════════════════════"
             echo ""
-            docker compose down
+            docker compose --profile logging down
             echo ""
             echo -e "${GREEN}✓ All services stopped${NC}"
             echo ""
@@ -276,6 +318,39 @@ JSEOF
                 echo "  PiAware:      $PIAWARE_FEEDER_ID"
                 echo ""
                 
+                # Show logger stats if available
+                LOGGER_PORT_VAL=$(grep "^LOGGER_PORT=" .env 2>/dev/null | cut -d'=' -f2)
+                LOGGER_PORT_VAL=${LOGGER_PORT_VAL:-8082}
+                LOGGER_STATS=$(curl -s --connect-timeout 2 "http://localhost:${LOGGER_PORT_VAL}/api/stats" 2>/dev/null)
+                
+                if [ -n "$LOGGER_STATS" ] && echo "$LOGGER_STATS" | grep -q "total_positions"; then
+                    echo "════════════════════════════════════════════════════════════════════════════════"
+                    echo -e "${GREEN}📼 Flight Logger:${NC}"
+                    echo ""
+                    
+                    # Parse JSON with grep/sed (avoiding jq dependency)
+                    POSITIONS=$(echo "$LOGGER_STATS" | grep -o '"total_positions":[0-9]*' | cut -d':' -f2)
+                    AIRCRAFT=$(echo "$LOGGER_STATS" | grep -o '"unique_aircraft":[0-9]*' | cut -d':' -f2)
+                    FLIGHTS=$(echo "$LOGGER_STATS" | grep -o '"unique_flights":[0-9]*' | cut -d':' -f2)
+                    STORAGE=$(echo "$LOGGER_STATS" | grep -o '"storage_mb":[0-9.]*' | cut -d':' -f2)
+                    PAUSED=$(echo "$LOGGER_STATS" | grep -o '"paused":[a-z]*' | cut -d':' -f2)
+                    INTERVAL=$(echo "$LOGGER_STATS" | grep -o '"interval":[0-9]*' | cut -d':' -f2)
+                    
+                    if [ "$PAUSED" = "true" ]; then
+                        STATUS_TEXT="⏸️  Paused"
+                    else
+                        STATUS_TEXT="● Recording"
+                    fi
+                    
+                    echo "  Status:     $STATUS_TEXT"
+                    echo "  Interval:   ${INTERVAL}s"
+                    echo "  Positions:  $POSITIONS"
+                    echo "  Aircraft:   $AIRCRAFT"
+                    echo "  Flights:    $FLIGHTS"
+                    echo "  Storage:    ${STORAGE} MB"
+                    echo ""
+                fi
+                
                 # Log options
                 echo "════════════════════════════════════════════════════════════════════════════════"
                 echo -e "${GREEN}📋 Log Options:${NC}"
@@ -285,14 +360,15 @@ JSEOF
                 echo "  3) View radarbox logs"
                 echo "  4) View flightradar24 logs"
                 echo "  5) View piaware logs"
-                echo "  6) Check for errors only"
-                echo "  7) Live logs (follow mode)"
-                echo "  8) Restart a service"
+                echo "  6) View logger logs"
+                echo "  7) Check for errors only"
+                echo "  8) Live logs (follow mode)"
+                echo "  9) Restart a service"
                 echo "  0) Back to main menu"
                 echo ""
-                echo -e "${CYAN}💡 Logs show last 50 lines (static). Use option 7 for live streaming.${NC}"
+                echo -e "${CYAN}💡 Logs show last 50 lines (static). Use option 8 for live streaming.${NC}"
                 echo ""
-                read -p "Choice [0-8]: " log_choice
+                read -p "Choice [0-9]: " log_choice
                 
                 case $log_choice in
                     1) 
@@ -337,13 +413,21 @@ JSEOF
                         ;;
                     6) 
                         clear
+                        echo "Logger logs - Last 50 lines:"
+                        echo "════════════════════════════════════════════════════════════════════════════════"
+                        docker compose --profile logging logs --tail=50 logger 2>&1 | grep -v "version.*obsolete"
+                        echo ""
+                        read -p "Press Enter to continue..."
+                        ;;
+                    7) 
+                        clear
                         echo "Checking for errors in the last 100 lines..."
                         echo "════════════════════════════════════════════════════════════════════════════════"
                         docker compose logs --tail=100 2>&1 | grep -v "version.*obsolete" | grep -iE "error|fail|warn" || echo "✓ No errors found!"
                         echo ""
                         read -p "Press Enter to continue..."
                         ;;
-                    7)
+                    8)
                         clear
                         echo "Live logs (Ctrl+C to stop)"
                         echo "════════════════════════════════════════════════════════════════════════════════"
@@ -354,19 +438,21 @@ JSEOF
                         echo "  3) RadarBox only"
                         echo "  4) FR24 only"
                         echo "  5) PiAware only"
+                        echo "  6) Logger only"
                         echo ""
-                        read -p "Choice [1-5]: " live_choice
+                        read -p "Choice [1-6]: " live_choice
                         clear
                         case $live_choice in
-                            1) docker compose logs -f 2>&1 | grep -v "version.*obsolete" ;;
+                            1) docker compose --profile logging logs -f 2>&1 | grep -v "version.*obsolete" ;;
                             2) docker compose logs -f ultrafeeder 2>&1 | grep -v "version.*obsolete" ;;
                             3) docker compose logs -f radarbox 2>&1 | grep -v "version.*obsolete" ;;
                             4) docker compose logs -f flightradar24 2>&1 | grep -v "version.*obsolete" ;;
                             5) docker compose logs -f piaware 2>&1 | grep -v "version.*obsolete" ;;
+                            6) docker compose --profile logging logs -f logger 2>&1 | grep -v "version.*obsolete" ;;
                             *) ;;
                         esac
                         ;;
-                    8)
+                    9)
                         clear
                         echo "════════════════════════════════════════════════════════════════════════════════"
                         echo "  Restart a Service"
@@ -377,10 +463,11 @@ JSEOF
                         echo "  3) RadarBox"
                         echo "  4) FlightRadar24"
                         echo "  5) PiAware"
-                        echo "  6) All services"
+                        echo "  6) Logger"
+                        echo "  7) All services"
                         echo "  0) Cancel"
                         echo ""
-                        read -p "Which service? [0-6]: " svc_choice
+                        read -p "Which service? [0-7]: " svc_choice
                         
                         case $svc_choice in
                             1) 
@@ -396,6 +483,8 @@ JSEOF
                                     RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
                                     RADARBOX_SERIAL=$(grep "^RADARBOX_SERIAL=" .env | cut -d'=' -f2)
                                     PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
+                                    LOGGER_PORT=$(grep "^LOGGER_PORT=" .env | cut -d'=' -f2)
+                                    LOGGER_PORT=${LOGGER_PORT:-8082}
                                     
                                     cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -406,7 +495,8 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    loggerPort: ${LOGGER_PORT}
 };
 JSEOF
                                     echo -e "${GREEN}✓${NC}"
@@ -456,9 +546,17 @@ JSEOF
                                 ;;
                             6)
                                 echo ""
+                                spin "Restarting logger" &
+                                SPIN_PID=$!
+                                docker compose --profile logging restart logger > /dev/null 2>&1
+                                stop_spin
+                                echo -e "${GREEN}✓${NC} Restarting logger"
+                                ;;
+                            7)
+                                echo ""
                                 spin "Restarting all services" &
                                 SPIN_PID=$!
-                                docker compose restart > /dev/null 2>&1
+                                docker compose --profile logging restart > /dev/null 2>&1
                                 stop_spin
                                 echo -e "${GREEN}✓${NC} Restarting all services"
                                 ;;
@@ -478,6 +576,351 @@ JSEOF
             exec "$0"
             ;;
         5)
+            # Backup / Restore
+            echo ""
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo "  Backup / Restore"
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo ""
+            echo "  1) Backup config only"
+            echo "     └─ Just .env and dashboard-config.js (~1 KB)"
+            echo ""
+            echo "  2) Backup config + flight logs"
+            echo "     └─ Config plus your flight history database"
+            echo ""
+            echo "  3) Backup everything"
+            echo "     └─ Config, flight logs, graphs, and all feeder data"
+            echo ""
+            echo "  4) Restore from backup"
+            echo "     └─ Restore a previous backup file"
+            echo ""
+            echo "  0) Cancel"
+            echo ""
+            read -p "Choice [0-4]: " backup_choice
+            
+            BACKUP_DIR="$HOME"
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            
+            case $backup_choice in
+                0)
+                    exec "$0"
+                    ;;
+                1)
+                    # Config only
+                    BACKUP_FILE="$BACKUP_DIR/easyadsb-config-$TIMESTAMP.tar.gz"
+                    echo ""
+                    read -p "Save to [$BACKUP_FILE]: " custom_path
+                    [ -n "$custom_path" ] && BACKUP_FILE="$custom_path"
+                    
+                    echo ""
+                    echo -n "Creating backup... "
+                    tar -czf "$BACKUP_FILE" .env dashboard-config.js 2>/dev/null
+                    echo -e "${GREEN}✓${NC}"
+                    echo ""
+                    echo "════════════════════════════════════════════════════════════════════════════════"
+                    echo -e "  ${GREEN}✓ Backup saved to:${NC}"
+                    echo "  $BACKUP_FILE"
+                    echo ""
+                    ls -lh "$BACKUP_FILE"
+                    echo "════════════════════════════════════════════════════════════════════════════════"
+                    ;;
+                2)
+                    # Config + flight logs
+                    BACKUP_FILE="$BACKUP_DIR/easyadsb-logs-$TIMESTAMP.tar.gz"
+                    echo ""
+                    read -p "Save to [$BACKUP_FILE]: " custom_path
+                    [ -n "$custom_path" ] && BACKUP_FILE="$custom_path"
+                    
+                    echo ""
+                    spin "Creating backup (this may take a moment)" &
+                    SPIN_PID=$!
+                    tar -czf "$BACKUP_FILE" .env dashboard-config.js -C / opt/adsb/flightlogs 2>/dev/null
+                    stop_spin
+                    echo -e "${GREEN}✓${NC} Backup created"
+                    echo ""
+                    echo "════════════════════════════════════════════════════════════════════════════════"
+                    echo -e "  ${GREEN}✓ Backup saved to:${NC}"
+                    echo "  $BACKUP_FILE"
+                    echo ""
+                    ls -lh "$BACKUP_FILE"
+                    echo "════════════════════════════════════════════════════════════════════════════════"
+                    ;;
+                3)
+                    # Everything
+                    BACKUP_FILE="$BACKUP_DIR/easyadsb-full-$TIMESTAMP.tar.gz"
+                    echo ""
+                    echo -e "${YELLOW}⚠${NC} Full backup may be large (graphs, history, logs)"
+                    read -p "Save to [$BACKUP_FILE]: " custom_path
+                    [ -n "$custom_path" ] && BACKUP_FILE="$custom_path"
+                    
+                    echo ""
+                    spin "Creating full backup (this may take a while)" &
+                    SPIN_PID=$!
+                    tar -czf "$BACKUP_FILE" .env dashboard-config.js -C / opt/adsb 2>/dev/null
+                    stop_spin
+                    echo -e "${GREEN}✓${NC} Backup created"
+                    echo ""
+                    echo "════════════════════════════════════════════════════════════════════════════════"
+                    echo -e "  ${GREEN}✓ Backup saved to:${NC}"
+                    echo "  $BACKUP_FILE"
+                    echo ""
+                    ls -lh "$BACKUP_FILE"
+                    echo "════════════════════════════════════════════════════════════════════════════════"
+                    ;;
+                4)
+                    # Restore
+                    echo ""
+                    echo "Available backups in $HOME:"
+                    ls -lht "$HOME"/easyadsb-*.tar.gz 2>/dev/null | head -10 || echo "  No backups found in $HOME"
+                    echo ""
+                    read -p "Enter backup file path: " restore_file
+                    
+                    if [ ! -f "$restore_file" ]; then
+                        echo -e "${YELLOW}✗${NC} File not found: $restore_file"
+                        echo ""
+                        read -p "Press Enter to continue..."
+                        exec "$0"
+                    fi
+                    
+                    echo ""
+                    echo "This backup contains:"
+                    tar -tzf "$restore_file" | head -20
+                    echo ""
+                    echo -e "${YELLOW}⚠${NC} This will overwrite existing files!"
+                    read -p "Restore this backup? (y/n): " -n 1 -r
+                    echo ""
+                    
+                    if [[ $REPLY =~ ^[Yy]$ ]]; then
+                        echo ""
+                        # Stop services first
+                        spin "Stopping services" &
+                        SPIN_PID=$!
+                        docker compose --profile logging down 2>/dev/null
+                        stop_spin
+                        echo -e "${GREEN}✓${NC} Services stopped"
+                        
+                        # Restore config files to current directory
+                        echo -n "Restoring config files... "
+                        tar -xzf "$restore_file" .env dashboard-config.js 2>/dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}skipped${NC}"
+                        
+                        # Restore data directories if present in backup
+                        if tar -tzf "$restore_file" | grep -q "opt/adsb"; then
+                            echo -n "Restoring data directories... "
+                            sudo tar -xzf "$restore_file" -C / opt/adsb 2>/dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}skipped${NC}"
+                        fi
+                        
+                        echo ""
+                        echo "════════════════════════════════════════════════════════════════════════════════"
+                        echo -e "  ${GREEN}✓ Restore complete!${NC}"
+                        echo "════════════════════════════════════════════════════════════════════════════════"
+                        echo ""
+                        echo "  Run ./setup.sh and choose 'Restart services' to start."
+                    fi
+                    ;;
+                *)
+                    exec "$0"
+                    ;;
+            esac
+            echo ""
+            read -p "Press Enter to continue..."
+            exec "$0"
+            ;;
+        6)
+            # Update EasyADSB
+            echo ""
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo "  Update EasyADSB"
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo ""
+            
+            # Check if git repo
+            if [ ! -d ".git" ]; then
+                echo -e "${YELLOW}⚠${NC} This doesn't appear to be a git clone."
+                echo "  To update, re-clone from GitHub:"
+                echo "  git clone https://github.com/datboip/easyadsb"
+                echo ""
+                read -p "Press Enter to continue..."
+                exec "$0"
+            fi
+            
+            # Fetch latest
+            echo "Checking for updates..."
+            git fetch origin main 2>/dev/null
+            
+            LOCAL=$(git rev-parse HEAD 2>/dev/null)
+            REMOTE=$(git rev-parse origin/main 2>/dev/null)
+            
+            if [ "$LOCAL" = "$REMOTE" ]; then
+                echo -e "${GREEN}✓${NC} Already up to date!"
+                echo ""
+                read -p "Press Enter to continue..."
+                exec "$0"
+            fi
+            
+            echo ""
+            echo "Updates available:"
+            git log --oneline HEAD..origin/main | head -5
+            echo ""
+            read -p "Pull updates and restart? (y/n): " -n 1 -r
+            echo ""
+            
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                # Backup current .env
+                if [ -f ".env" ]; then
+                    cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+                    echo "✓ Backed up .env"
+                fi
+                
+                # Pull updates
+                echo "Pulling updates..."
+                git pull origin main
+                echo ""
+                
+                # Check if setup.sh changed
+                if git diff HEAD@{1} HEAD --name-only 2>/dev/null | grep -q "setup.sh"; then
+                    echo -e "${YELLOW}⚠${NC} setup.sh was updated"
+                    echo "  Run ./setup.sh again to apply changes"
+                fi
+                
+                # Regenerate dashboard config
+                if [ -f ".env" ]; then
+                    echo ""
+                    echo "Regenerating dashboard config..."
+                    ADSBX_UUID=$(grep "^ADSBX_UUID=" .env | cut -d'=' -f2)
+                    MULTIFEEDER_UUID=$(grep "^MULTIFEEDER_UUID=" .env | cut -d'=' -f2)
+                    FR24KEY=$(grep "^FR24KEY=" .env | cut -d'=' -f2)
+                    RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
+                    RADARBOX_SERIAL=$(grep "^RADARBOX_SERIAL=" .env | cut -d'=' -f2)
+                    PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
+                    LOGGER_PORT=$(grep "^LOGGER_PORT=" .env | cut -d'=' -f2)
+                    LOGGER_PORT=${LOGGER_PORT:-8082}
+                    LOG_ENABLED=$(grep "^LOG_ENABLED=" .env | cut -d'=' -f2)
+                    
+                    cat > dashboard-config.js << JSEOF
+// Auto-generated configuration for EasyADSB Dashboard
+// Generated: $(date)
+window.FEEDER_CONFIG = {
+    adsbxUUID: "${ADSBX_UUID}",
+    adsbLolUUID: "${MULTIFEEDER_UUID}",
+    fr24Key: "${FR24KEY}",
+    radarboxKey: "${RADARBOX_KEY}",
+    radarboxSerial: "${RADARBOX_SERIAL}",
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    loggerPort: ${LOGGER_PORT}
+};
+JSEOF
+                    echo "✓ Dashboard config updated"
+                fi
+                
+                # Restart services
+                echo ""
+                echo "Restarting services..."
+                docker compose pull
+                if [ "$LOG_ENABLED" = "true" ] && [ -d "logger" ]; then
+                    docker compose --profile logging up -d --build
+                else
+                    docker compose up -d
+                fi
+                echo ""
+                echo "✓ Update complete!"
+                MY_IP=$(hostname -I | awk '{print $1}')
+                DASHBOARD_PORT=$(grep "^DASHBOARD_PORT=" .env 2>/dev/null | cut -d'=' -f2)
+                DASHBOARD_PORT=${DASHBOARD_PORT:-8081}
+                echo "  Dashboard: http://$MY_IP:$DASHBOARD_PORT"
+            fi
+            echo ""
+            read -p "Press Enter to continue..."
+            exec "$0"
+            ;;
+        7)
+            # Uninstall EasyADSB
+            echo ""
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo "  Uninstall EasyADSB"
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo ""
+            echo -e "${YELLOW}⚠ WARNING:${NC} This will remove all EasyADSB containers!"
+            echo ""
+            echo "What would you like to remove?"
+            echo ""
+            echo "  1) Containers only"
+            echo "     └─ Keeps all data & config. Good for troubleshooting or rebuilding."
+            echo ""
+            echo "  2) Containers + flight logs"
+            echo "     └─ Keeps feeder data & config. Clears your logged flight history."
+            echo ""
+            echo "  3) Containers + all data"
+            echo "     └─ Keeps config only. Removes graphs, history, and flight logs."
+            echo ""
+            echo "  4) Complete removal"
+            echo "     └─ Removes everything. Fresh start, you'll need to reconfigure."
+            echo ""
+            echo "  0) Cancel"
+            echo ""
+            read -p "Choice [0-4]: " uninstall_choice
+            
+            case $uninstall_choice in
+                0)
+                    echo "Cancelled."
+                    exec "$0"
+                    ;;
+                1|2|3|4)
+                    echo ""
+                    read -p "Are you sure? Type 'yes' to confirm: " confirm
+                    if [ "$confirm" != "yes" ]; then
+                        echo "Cancelled."
+                        exec "$0"
+                    fi
+                    
+                    echo ""
+                    spin "Stopping and removing containers" &
+                    SPIN_PID=$!
+                    docker compose --profile logging down 2>/dev/null
+                    docker compose down 2>/dev/null
+                    stop_spin
+                    echo -e "${GREEN}✓${NC} Containers removed"
+                    
+                    if [ "$uninstall_choice" = "2" ]; then
+                        echo ""
+                        echo -n "Removing flight logs... "
+                        sudo rm -rf /opt/adsb/flightlogs
+                        echo -e "${GREEN}✓${NC}"
+                    fi
+                    
+                    if [ "$uninstall_choice" = "3" ] || [ "$uninstall_choice" = "4" ]; then
+                        echo ""
+                        echo -n "Removing all data (/opt/adsb)... "
+                        sudo rm -rf /opt/adsb
+                        echo -e "${GREEN}✓${NC}"
+                    fi
+                    
+                    if [ "$uninstall_choice" = "4" ]; then
+                        echo ""
+                        echo -n "Removing configuration files... "
+                        rm -f .env .env.backup.* dashboard-config.js
+                        echo -e "${GREEN}✓${NC}"
+                    fi
+                    
+                    echo ""
+                    echo "════════════════════════════════════════════════════════════════════════════════"
+                    echo -e "  ${GREEN}✓ Uninstall complete!${NC}"
+                    echo "════════════════════════════════════════════════════════════════════════════════"
+                    echo ""
+                    if [ "$uninstall_choice" != "4" ]; then
+                        echo "  Your configuration is preserved. Run ./setup.sh to reinstall."
+                    else
+                        echo "  To remove EasyADSB folder: cd .. && rm -rf $(basename $PWD)"
+                    fi
+                    echo ""
+                    exit 0
+                    ;;
+                *)
+                    echo "Invalid choice."
+                    exec "$0"
+                    ;;
+            esac
+            ;;
+        8)
             echo ""
             echo "Exiting."
             exit 0
@@ -701,6 +1144,7 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                     echo ""
                     echo "Regenerating dashboard config..."
                     source .env
+                    LOGGER_PORT=${LOGGER_PORT:-8082}
                     cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
 // Generated: $(date)
@@ -710,7 +1154,8 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    loggerPort: ${LOGGER_PORT}
 };
 JSEOF
                     echo "✓ Dashboard config updated"
@@ -745,7 +1190,7 @@ JSEOF
             
             echo ""
             echo "Stopping and removing containers..."
-            docker compose down
+            docker compose --profile logging down
             echo "✓ Containers removed"
             
             echo ""
@@ -852,6 +1297,95 @@ if [ "$REUSE_LOCATION" != "true" ]; then
     echo -e "${GREEN}✓ Location configured${NC}"
 fi
 
+# Port Configuration
+echo ""
+echo "════════════════════════════════════════════════════════════════════════════════"
+echo "  Port Configuration"
+echo "════════════════════════════════════════════════════════════════════════════════"
+echo ""
+
+# Default ports
+DEFAULT_DASH_PORT=8081
+DEFAULT_LOG_PORT=8082
+
+# Check if defaults are available
+if check_port $DEFAULT_DASH_PORT && check_port $DEFAULT_LOG_PORT; then
+    DASHBOARD_PORT=$DEFAULT_DASH_PORT
+    LOGGER_PORT=$DEFAULT_LOG_PORT
+    echo "Default ports available:"
+    echo "  Dashboard: $DASHBOARD_PORT"
+    echo "  Logger API: $LOGGER_PORT"
+else
+    echo -e "${YELLOW}⚠ Some default ports may be in use${NC}"
+    echo ""
+    read -p "Dashboard port [$DEFAULT_DASH_PORT]: " DASHBOARD_PORT
+    DASHBOARD_PORT=${DASHBOARD_PORT:-$DEFAULT_DASH_PORT}
+    
+    read -p "Logger API port [$DEFAULT_LOG_PORT]: " LOGGER_PORT
+    LOGGER_PORT=${LOGGER_PORT:-$DEFAULT_LOG_PORT}
+fi
+echo ""
+echo -e "${GREEN}✓ Ports configured${NC}"
+
+# Flight Logger Setup
+echo ""
+echo "════════════════════════════════════════════════════════════════════════════════"
+echo "  Flight Logger"
+echo "════════════════════════════════════════════════════════════════════════════════"
+echo ""
+echo "The flight logger saves all aircraft you track to a local database."
+echo "You can export your data, see statistics, and (coming soon) replay flights."
+echo ""
+read -p "Enable flight logging? (Y/n): " -n 1 -r
+echo ""
+if [[ $REPLY =~ ^[Nn]$ ]]; then
+    LOG_ENABLED=false
+    LOG_INTERVAL=10
+    LOG_RETENTION_DAYS=14
+    echo "  ✗ Logger disabled (can enable later by re-running setup)"
+else
+    LOG_ENABLED=true
+    echo "  ✓ Logger enabled"
+    echo ""
+    
+    # Sample rate
+    echo "Sample rate (how often to record positions):"
+    echo "  1) 5 seconds  (more data, ~200MB/day)"
+    echo "  2) 10 seconds (recommended, ~100MB/day)"
+    echo "  3) 15 seconds (balanced, ~70MB/day)"
+    echo "  4) 30 seconds (less data, ~35MB/day)"
+    read -p "Choice [2]: " interval_choice
+    case $interval_choice in
+        1) LOG_INTERVAL=5 ;;
+        3) LOG_INTERVAL=15 ;;
+        4) LOG_INTERVAL=30 ;;
+        *) LOG_INTERVAL=10 ;;
+    esac
+    echo "  → Sample rate: ${LOG_INTERVAL} seconds"
+    echo ""
+    
+    # Retention
+    echo "How long to keep logs:"
+    echo "  1) 7 days   (~700MB)"
+    echo "  2) 14 days  (~1.4GB)"
+    echo "  3) 30 days  (~3GB)"
+    echo "  4) Forever  (manual cleanup)"
+    read -p "Choice [2]: " retention_choice
+    case $retention_choice in
+        1) LOG_RETENTION_DAYS=7 ;;
+        3) LOG_RETENTION_DAYS=30 ;;
+        4) LOG_RETENTION_DAYS=0 ;;
+        *) LOG_RETENTION_DAYS=14 ;;
+    esac
+    if [ $LOG_RETENTION_DAYS -eq 0 ]; then
+        echo "  → Keeping logs forever"
+    else
+        echo "  → Keeping ${LOG_RETENTION_DAYS} days of logs"
+    fi
+fi
+echo ""
+echo -e "${GREEN}✓ Logger configured${NC}"
+
 # Ask about existing keys
 echo ""
 read -p "Have you set up ADS-B feeding before? (y/n): " -n 1 -r
@@ -879,10 +1413,12 @@ echo ""
 # Check if we have an old key
 if [ -n "$OLD_RB" ] && [ "$OLD_RB" != "YOUR-RADARBOX-KEY" ]; then
     echo "Found existing RadarBox key: $OLD_RB"
-    read -p "Keep this key? (y/n): " -n 1 -r
+    [ -n "$OLD_RB_SERIAL" ] && echo "Found existing RadarBox serial: $OLD_RB_SERIAL"
+    read -p "Keep these? (y/n): " -n 1 -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         RADARBOX_KEY=$OLD_RB
+        RADARBOX_SERIAL=$OLD_RB_SERIAL
         echo -e "${GREEN}✓ Keeping existing RadarBox key${NC}"
         HAS_RB_KEY=true
     else
@@ -1478,6 +2014,15 @@ RADARBOX_SERIAL=$RADARBOX_SERIAL
 PIAWARE_FEEDER_ID=$PIAWARE_FEEDER_ID
 
 ULTRAFEEDER_CONFIG=adsb,feed.flightradar24.com,30004,beast_reduce_plus_out,uuid=${FR24KEY};adsb,feed.adsbexchange.com,30004,beast_reduce_plus_out,uuid=${ADSBX_UUID};mlat,in.adsb.lol,31090,uuid=${MULTIFEEDER_UUID}
+
+# Port Configuration
+DASHBOARD_PORT=$DASHBOARD_PORT
+LOGGER_PORT=$LOGGER_PORT
+
+# Flight Logger Settings
+LOG_ENABLED=$LOG_ENABLED
+LOG_INTERVAL=$LOG_INTERVAL
+LOG_RETENTION_DAYS=$LOG_RETENTION_DAYS
 EOF
 
 echo -e "${GREEN}✓${NC}"
@@ -1492,7 +2037,8 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    loggerPort: ${LOGGER_PORT}
 };
 JSEOF
 echo -e "${GREEN}✓${NC}"
@@ -1503,7 +2049,7 @@ read -p "Start all feeders now? (y/n): " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     # Check for existing containers
-    EXISTING_CONTAINERS=$(docker ps -a --filter "name=ultrafeeder\|adsb-dashboard\|radarbox\|piaware\|flightradar24" --format "{{.Names}}" 2>/dev/null)
+    EXISTING_CONTAINERS=$(docker ps -a --filter "name=ultrafeeder\|adsb-dashboard\|radarbox\|piaware\|flightradar24\|easyadsb-logger" --format "{{.Names}}" 2>/dev/null)
     
     if [ ! -z "$EXISTING_CONTAINERS" ]; then
         echo ""
@@ -1515,11 +2061,34 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             spin "Cleaning up old containers" &
             SPIN_PID=$!
+            docker compose --profile logging down 2>/dev/null
             docker compose down 2>/dev/null
             stop_spin
             echo -e "${GREEN}✓${NC} Old containers removed"
         else
             echo -e "${YELLOW}Note:${NC} Existing containers may conflict with new setup"
+        fi
+    fi
+    
+    # Create logger data directory if logging enabled
+    if [ "$LOG_ENABLED" = "true" ]; then
+        echo ""
+        echo -n "Creating logger data directory... "
+        sudo mkdir -p /opt/adsb/flightlogs
+        sudo chmod 777 /opt/adsb/flightlogs
+        echo -e "${GREEN}✓${NC}"
+        
+        # Build logger container
+        if [ -d "logger" ]; then
+            spin "Building logger container" &
+            SPIN_PID=$!
+            docker compose --profile logging build logger 2>/dev/null
+            stop_spin
+            echo -e "${GREEN}✓${NC} Logger container built"
+        else
+            echo -e "${YELLOW}⚠${NC} Logger folder not found - skipping logger"
+            echo "  (Download logger/ folder from GitHub to enable)"
+            LOG_ENABLED=false
         fi
     fi
     
@@ -1529,9 +2098,15 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     stop_spin
     echo -e "${GREEN}✓${NC} Images pulled"
     echo ""
+    
+    # Start services (with or without logging profile)
     spin "Starting services" &
     SPIN_PID=$!
-    docker compose up -d
+    if [ "$LOG_ENABLED" = "true" ] && [ -d "logger" ]; then
+        docker compose --profile logging up -d
+    else
+        docker compose up -d
+    fi
     stop_spin
     echo -e "${GREEN}✓${NC} Services started"
     
@@ -1539,7 +2114,11 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     sleep 3
     echo ""
     echo "Service Status:"
-    docker compose ps
+    if [ "$LOG_ENABLED" = "true" ]; then
+        docker compose --profile logging ps
+    else
+        docker compose ps
+    fi
     echo ""
     
     sleep 2
@@ -1568,6 +2147,8 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
             FR24KEY=$(grep "^FR24KEY=" .env | cut -d'=' -f2)
             RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
             PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
+            LOGGER_PORT=$(grep "^LOGGER_PORT=" .env | cut -d'=' -f2)
+            LOGGER_PORT=${LOGGER_PORT:-8082}
             
             cat > dashboard-config.js << JSEOF
 // Auto-generated configuration for EasyADSB Dashboard
@@ -1578,7 +2159,8 @@ window.FEEDER_CONFIG = {
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RB_SERIAL}",
-    piawareID: "${PIAWARE_FEEDER_ID}"
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    loggerPort: ${LOGGER_PORT}
 };
 JSEOF
             echo "✓ Dashboard config updated with serial"
@@ -1596,8 +2178,14 @@ JSEOF
     echo -e "  ${GREEN}✓ SETUP COMPLETE!${NC}"
     echo "════════════════════════════════════════════════════════════════════════════════"
     echo ""
-    echo "  Dashboard:  http://$MY_IP:8081/"
+    echo "  Dashboard:  http://$MY_IP:$DASHBOARD_PORT/"
     echo "  Live Map:   http://$MY_IP:8080/"
+    if [ "$LOG_ENABLED" = "true" ]; then
+        echo "  Logger API: http://$MY_IP:$LOGGER_PORT/"
+        echo ""
+        echo "  📼 Flight Logger: ENABLED"
+        echo "     Sample rate: ${LOG_INTERVAL}s | Retention: ${LOG_RETENTION_DAYS} days"
+    fi
     echo ""
     echo "  Verify your feeds:"
     echo "    • https://www.adsbexchange.com/myip/"

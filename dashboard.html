@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   EasyADSB Dashboard
-  Version: 1.1.0
+  Version: 1.2.0
   Last Updated: 2025-11-29
   
   An automated multi-feeder setup for ADS-B enthusiasts
@@ -78,6 +78,26 @@
             text-align: center;
             color: white;
             margin-bottom: 30px;
+            position: relative;
+        }
+
+        .header-buttons {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .header-btn {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s;
         }
 
         .header h1 {
@@ -449,6 +469,7 @@
 
         .copy-btn {
             background: #667eea;
+            color: white;
             border: none;
             padding: 6px 10px;
             border-radius: 6px;
@@ -473,8 +494,19 @@
                 grid-template-columns: 1fr;
             }
             
+            .header {
+                padding-bottom: 20px;
+            }
+            
             .header h1 {
-                font-size: 2em;
+                font-size: 1.5em;
+                padding-right: 0;
+            }
+            
+            .header-buttons {
+                position: static !important;
+                justify-content: center;
+                margin-top: 15px;
             }
             
             .card {
@@ -484,6 +516,11 @@
             /* Stack ID boxes on mobile */
             .station-ids-grid {
                 grid-template-columns: 1fr !important;
+            }
+            
+            /* Logger stats 2x2 grid on mobile */
+            .logger-stats-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
             }
         }
         
@@ -693,36 +730,14 @@
         <div class="header">
             <h1>✈️ EasyADSB Dashboard</h1>
             <p>Monitor your aircraft tracking feeds</p>
-            <button onclick="toggleDarkMode()" style="
-                position: absolute;
-                top: 20px;
-                right: 80px;
-                background: rgba(255,255,255,0.2);
-                border: 2px solid rgba(255,255,255,0.3);
-                color: white;
-                padding: 10px 15px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 1.2em;
-                transition: all 0.3s;
-            " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-                <span id="theme-icon">🌙</span>
-            </button>
-            <button onclick="toggleStealthMode()" title="Stealth Mode - Hide IDs for screenshots" style="
-                position: absolute;
-                top: 20px;
-                right: 20px;
-                background: rgba(255,255,255,0.2);
-                border: 2px solid rgba(255,255,255,0.3);
-                color: white;
-                padding: 10px 15px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 1.2em;
-                transition: all 0.3s;
-            " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-                <span id="stealth-icon">👁️</span>
-            </button>
+            <div class="header-buttons">
+                <button onclick="toggleDarkMode()" class="header-btn" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                    <span id="theme-icon">🌙</span>
+                </button>
+                <button onclick="toggleStealthMode()" class="header-btn" title="Stealth Mode - Hide IDs for screenshots" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                    <span id="stealth-icon">🙈</span>
+                </button>
+            </div>
         </div>
 
         <div class="grid">
@@ -784,7 +799,7 @@
                 <div class="card-content">
                     Community ADS-B aggregator.
                     <div class="card-links">
-                        <a href="https://my.adsb.lol/" target="_blank" class="card-link">My Map</a>
+                        <a href="https://adsb.lol" target="_blank" class="card-link">Global Map</a>
                         <a href="https://mlat.adsb.lol/" target="_blank" class="card-link secondary">MLAT Map</a>
                     </div>
                 </div>
@@ -865,13 +880,16 @@
         <!-- Quick Stats -->
         <div class="card" style="margin-top: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2 style="margin: 0;">📊 Quick Stats</h2>
+                <div>
+                    <h2 style="margin: 0;">📊 Quick Stats</h2>
+                    <span style="font-size: 0.75em; color: var(--text-secondary);">Live data from your receiver</span>
+                </div>
                 <span id="stats-update-time" style="font-size: 0.75em; color: var(--text-secondary);"></span>
             </div>
             <div class="stats-grid">
                 <div class="stat-box" style="border-left: 4px solid #22c55e;">
                     <div class="stat-value" id="aircraft-count">-</div>
-                    <div class="stat-label">✈️ Aircraft Tracked</div>
+                    <div class="stat-label">✈️ Aircraft Now</div>
                 </div>
                 <div class="stat-box" style="border-left: 4px solid #f97316;">
                     <div class="stat-value" id="messages-count">-</div>
@@ -952,9 +970,114 @@
             </div>
         </div>
 
+        <!-- Flight Logger Section -->
+        <div class="card" style="margin-top: 20px;" id="logger-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="margin: 0;">📼 Flight Logger</h2>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span id="logger-status" style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background: var(--text-secondary); color: white;">Checking...</span>
+                    <button id="logger-toggle-btn" class="copy-btn" onclick="toggleLogger()" style="padding: 6px 12px; font-size: 12px;" disabled>
+                        ⏸️ Pause
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Logger Disabled Message (shown when logger not running) -->
+            <div id="logger-disabled" style="display: none; text-align: center; padding: 40px 20px;">
+                <div style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;">📼</div>
+                <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px; color: var(--text-primary);">Flight Logger Not Enabled</div>
+                <div style="font-size: 14px; color: var(--text-secondary);">Run <code style="background: var(--card-bg); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color);">./setup.sh</code> and enable flight logging to track your flight history.</div>
+            </div>
+            
+            <!-- Logger Stats (shown when running) -->
+            <div id="logger-stats" style="display: none;">
+                <!-- Stats Grid -->
+                <div class="logger-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                    <div class="id-box" style="text-align: center; padding: 15px;">
+                        <div id="logger-total" style="font-size: 22px; font-weight: 700; color: #667eea;">0</div>
+                        <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase; margin-top: 4px;">Positions</div>
+                    </div>
+                    <div class="id-box" style="text-align: center; padding: 15px;">
+                        <div id="logger-aircraft" style="font-size: 22px; font-weight: 700; color: #28a745;">0</div>
+                        <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase; margin-top: 4px;">Aircraft</div>
+                    </div>
+                    <div class="id-box" style="text-align: center; padding: 15px;">
+                        <div id="logger-flights" style="font-size: 22px; font-weight: 700; color: #fd7e14;">0</div>
+                        <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase; margin-top: 4px;">Flights</div>
+                    </div>
+                    <div class="id-box" style="text-align: center; padding: 15px;">
+                        <div id="logger-storage" style="font-size: 22px; font-weight: 700; color: #17a2b8;">0 MB</div>
+                        <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase; margin-top: 4px;">Storage</div>
+                    </div>
+                </div>
+                
+                <!-- Storage Bar -->
+                <div style="margin-bottom: 20px; padding: 15px; background: var(--bg-color); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+                        <span>Storage Used</span>
+                        <span id="logger-storage-text">0 MB / 0 GB free</span>
+                    </div>
+                    <div style="height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden;">
+                        <div id="logger-storage-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #667eea, #764ba2); transition: width 0.3s;"></div>
+                    </div>
+                    <div id="logger-estimate" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">
+                        Estimating storage requirements...
+                    </div>
+                </div>
+                
+                <!-- Date Range -->
+                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; text-align: center;">
+                    📅 <span id="logger-date-range">No data yet</span>
+                </div>
+                
+                <!-- Settings Box -->
+                <div style="padding: 15px; background: var(--bg-color); border-radius: 8px; margin-bottom: 20px;">
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; font-weight: 600;">⚙️ Settings</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
+                        <div style="min-width: 110px;">
+                            <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Sample Rate</label>
+                            <select id="logger-interval" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; background: var(--card-bg); color: var(--text-primary);">
+                                <option value="5">5 sec</option>
+                                <option value="10">10 sec</option>
+                                <option value="15">15 sec</option>
+                                <option value="30">30 sec</option>
+                                <option value="60">60 sec</option>
+                            </select>
+                        </div>
+                        <div style="min-width: 100px;">
+                            <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Keep Data</label>
+                            <select id="logger-retention" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; background: var(--card-bg); color: var(--text-primary);">
+                                <option value="7">7 days</option>
+                                <option value="14">14 days</option>
+                                <option value="30">30 days</option>
+                                <option value="0">Forever</option>
+                            </select>
+                        </div>
+                        <button id="logger-save-btn" class="copy-btn" onclick="saveLoggerSettings()" style="padding: 6px 14px; font-size: 13px;">
+                            💾 Save
+                        </button>
+                        <span id="logger-save-status" style="font-size: 11px; color: var(--text-secondary);"></span>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+                    <button class="copy-btn" onclick="exportLogs('csv')" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none;">
+                        📥 Export CSV
+                    </button>
+                    <button class="copy-btn" onclick="exportLogs('json')" style="background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%); color: white; border: none;">
+                        📥 Export JSON
+                    </button>
+                    <button class="copy-btn" onclick="clearLogs()" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none;">
+                        🗑️ Clear Logs
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Version Footer -->
         <div class="footer">
-            EasyADSB v1.1.0 | 
+            EasyADSB v1.2.0 | 
             <a href="https://github.com/datboip/easyadsb" target="_blank">⭐ GitHub</a> | 
             Built with <a href="https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder" target="_blank">ultrafeeder</a>
         </div>
@@ -1439,6 +1562,203 @@
             document.body.classList.add('stealth-mode');
             document.getElementById('stealth-icon').textContent = '🔒';
         }
+
+        // ══════════════════════════════════════════════════════════════════════════════
+        // FLIGHT LOGGER FUNCTIONS
+        // ══════════════════════════════════════════════════════════════════════════════
+        
+        const LOGGER_PORT = window.FEEDER_CONFIG?.loggerPort || 8082;
+        const LOGGER_URL = `http://${window.location.hostname}:${LOGGER_PORT}`;
+        let loggerAvailable = false;
+        let loggerPaused = false;
+        
+        async function checkLoggerStatus() {
+            try {
+                const response = await fetch(`${LOGGER_URL}/health`, { timeout: 3000 });
+                if (response.ok) {
+                    const data = await response.json();
+                    loggerAvailable = true;
+                    loggerPaused = data.paused;
+                    
+                    document.getElementById('logger-disabled').style.display = 'none';
+                    document.getElementById('logger-stats').style.display = 'block';
+                    
+                    const statusBadge = document.getElementById('logger-status');
+                    const toggleBtn = document.getElementById('logger-toggle-btn');
+                    toggleBtn.disabled = false;
+                    
+                    if (data.paused) {
+                        statusBadge.textContent = '⏸️ Paused';
+                        statusBadge.style.background = '#ffc107';
+                        toggleBtn.innerHTML = '▶️ Resume';
+                    } else {
+                        statusBadge.textContent = '● Recording';
+                        statusBadge.style.background = '#28a745';
+                        toggleBtn.innerHTML = '⏸️ Pause';
+                    }
+                    
+                    await loadLoggerStats();
+                } else {
+                    showLoggerDisabled();
+                }
+            } catch (error) {
+                console.log('Logger not available:', error.message);
+                showLoggerDisabled();
+            }
+        }
+        
+        function showLoggerDisabled() {
+            loggerAvailable = false;
+            document.getElementById('logger-disabled').style.display = 'block';
+            document.getElementById('logger-stats').style.display = 'none';
+            document.getElementById('logger-status').textContent = 'Disabled';
+            document.getElementById('logger-status').style.background = '#6c757d';
+            document.getElementById('logger-toggle-btn').disabled = true;
+        }
+        
+        async function loadLoggerStats() {
+            if (!loggerAvailable) return;
+            
+            try {
+                const response = await fetch(`${LOGGER_URL}/api/stats`);
+                const stats = await response.json();
+                
+                // Update stats display
+                document.getElementById('logger-total').textContent = formatNumber(stats.total_positions);
+                document.getElementById('logger-aircraft').textContent = formatNumber(stats.unique_aircraft);
+                document.getElementById('logger-flights').textContent = formatNumber(stats.unique_flights);
+                document.getElementById('logger-storage').textContent = `${stats.storage_mb} MB`;
+                
+                // Update settings dropdowns
+                document.getElementById('logger-interval').value = stats.interval;
+                document.getElementById('logger-retention').value = stats.retention_days;
+                
+                // Update storage bar
+                const usedMB = stats.storage_mb;
+                const freeMB = stats.disk_free_mb;
+                const totalMB = usedMB + freeMB;
+                const usedPercent = totalMB > 0 ? (usedMB / totalMB * 100) : 0;
+                
+                document.getElementById('logger-storage-bar').style.width = `${Math.min(usedPercent, 100)}%`;
+                document.getElementById('logger-storage-text').textContent = `${usedMB} MB / ${(freeMB / 1024).toFixed(1)} GB free`;
+                
+                // Estimate future storage
+                if (stats.total_positions > 0 && stats.oldest_record && stats.newest_record) {
+                    const oldestDate = new Date(stats.oldest_record);
+                    const newestDate = new Date(stats.newest_record);
+                    const daysCovered = Math.max(1, (newestDate - oldestDate) / (1000 * 60 * 60 * 24));
+                    const mbPerDay = usedMB / daysCovered;
+                    const estimate30Days = (mbPerDay * 30).toFixed(0);
+                    document.getElementById('logger-estimate').textContent = `~${mbPerDay.toFixed(1)} MB/day • Est. 30 days: ~${estimate30Days} MB`;
+                } else {
+                    document.getElementById('logger-estimate').textContent = 'Collecting data to estimate storage...';
+                }
+                
+                // Update date range
+                if (stats.oldest_record && stats.newest_record) {
+                    const oldest = new Date(stats.oldest_record).toLocaleDateString();
+                    const newest = new Date(stats.newest_record).toLocaleDateString();
+                    document.getElementById('logger-date-range').textContent = oldest === newest ? oldest : `${oldest} - ${newest}`;
+                } else {
+                    document.getElementById('logger-date-range').textContent = 'No data yet';
+                }
+                
+            } catch (error) {
+                console.error('Error loading logger stats:', error);
+            }
+        }
+        
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+        
+        async function toggleLogger() {
+            if (!loggerAvailable) return;
+            
+            const endpoint = loggerPaused ? 'resume' : 'pause';
+            try {
+                const response = await fetch(`${LOGGER_URL}/api/${endpoint}`, { method: 'POST' });
+                if (response.ok) {
+                    await checkLoggerStatus();
+                }
+            } catch (error) {
+                console.error('Error toggling logger:', error);
+            }
+        }
+        
+        async function saveLoggerSettings() {
+            if (!loggerAvailable) return;
+            
+            const btn = document.getElementById('logger-save-btn');
+            const status = document.getElementById('logger-save-status');
+            const interval = document.getElementById('logger-interval').value;
+            const retention = document.getElementById('logger-retention').value;
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Saving...';
+            
+            try {
+                const response = await fetch(`${LOGGER_URL}/api/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        interval: parseInt(interval),
+                        retention_days: parseInt(retention)
+                    })
+                });
+                
+                if (response.ok) {
+                    status.innerHTML = '<span style="color: #28a745;">✓ Settings saved!</span>';
+                    btn.textContent = '✓ Saved';
+                    setTimeout(() => {
+                        btn.textContent = '💾 Save';
+                        btn.disabled = false;
+                    }, 2000);
+                } else {
+                    throw new Error('Save failed');
+                }
+            } catch (error) {
+                console.error('Error saving logger settings:', error);
+                status.innerHTML = '<span style="color: #dc3545;">✗ Failed to save</span>';
+                btn.textContent = '💾 Save';
+                btn.disabled = false;
+            }
+            
+            // Clear status after 5 seconds
+            setTimeout(() => { status.textContent = ''; }, 5000);
+        }
+        
+        function exportLogs(format) {
+            if (!loggerAvailable) return;
+            
+            const endpoint = format === 'json' ? '/api/export/json' : '/api/export';
+            window.location.href = `${LOGGER_URL}${endpoint}`;
+        }
+        
+        async function clearLogs() {
+            if (!loggerAvailable) return;
+            
+            if (!confirm('⚠️ Are you sure you want to delete ALL flight logs?\n\nThis cannot be undone!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${LOGGER_URL}/api/clear`, { method: 'POST' });
+                if (response.ok) {
+                    await loadLoggerStats();
+                    alert('✓ All logs cleared');
+                }
+            } catch (error) {
+                console.error('Error clearing logs:', error);
+                alert('Error clearing logs');
+            }
+        }
+        
+        // Initialize logger
+        checkLoggerStatus();
+        setInterval(checkLoggerStatus, 30000); // Check every 30 seconds
     </script>
 </body>
 </html>

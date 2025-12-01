@@ -4,10 +4,7 @@
 
 One command. 15-20 minutes. Six flight tracking networks. Zero headaches.
 
----
-
-![Dashboard Preview](screenshots/dashboard-hero.png)
-*EasyADSB Dashboard - Track aircraft in real-time with live stats and maps*
+![EasyADSB Dashboard](screenshots/dashboard-full.png)
 
 ---
 
@@ -30,12 +27,14 @@ EasyADSB is an **all-in-one automated setup script** that turns your Raspberry P
 
 - ✅ **One-Command Setup** - Run `./setup.sh` and follow the prompts
 - ✅ **Auto-Configuration** - Automatically generates keys and IDs for all services
-- ✅ **Auto-Update** - Pull latest updates from GitHub (NEW!)
+- ✅ **Flight Logger** - Save all flights to local database, export CSV/JSON (NEW!)
+- ✅ **Configurable Ports** - Avoid conflicts with other services (NEW!)
+- ✅ **Auto-Update** - Pull latest updates from GitHub
 - ✅ **Web Dashboard** - Modern interface with live aircraft tracking
 - ✅ **Dark Mode** - Easy on the eyes, looks great
 - ✅ **Real-Time Stats** - Aircraft count, message rate, max range
 - ✅ **Mobile Responsive** - Works on phone, tablet, desktop
-- ✅ **Easy Uninstall** - Remove everything cleanly (NEW!)
+- ✅ **Easy Uninstall** - Remove everything cleanly
 - ✅ **Zero Manual Config** - No editing config files (unless you want to)
 
 ---
@@ -97,8 +96,13 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-![Setup Script Menu](screenshots/setup-menu.png)
-*Interactive setup menu - choose option 2 for first-time setup*
+For first-time setup, the wizard runs automatically:
+
+![First Run Setup](screenshots/setup-first-run.png)
+
+For returning users, you'll see the management menu:
+
+![Setup Menu](screenshots/setup-menu.png)
 
 ### Step 4: Follow the Interactive Wizard
 
@@ -109,7 +113,11 @@ The script will guide you through:
    - Timezone (e.g., `America/New_York`)
    - Station name (e.g., `MyADSB`)
 
-2. **Configure Services** (All Automatic!)
+2. **Configure Ports & Logger**
+   - Dashboard port (default: 8081)
+   - Flight logger settings (sample rate, retention)
+
+3. **Configure Services** (All Automatic!)
    - ✅ ADSBexchange: Auto-generates UUID
    - ✅ ADSB.lol: Auto-generates UUID
    - ✅ FlightRadar24: Auto-generates sharing key
@@ -118,13 +126,10 @@ The script will guide you through:
    
    *You can skip any service or enter your own keys if you already have them*
 
-3. **Start Services**
+4. **Start Services**
    - Docker containers are built and started
    - Services connect to aggregators
    - Dashboard becomes available
-
-![Setup Progress](screenshots/setup-progress.png)
-*Setup script with progress spinners and clear status messages*
 
 ### Step 5: Access Your Dashboard
 
@@ -138,12 +143,6 @@ http://YOUR-RASPBERRY-PI-IP:8081
 hostname -I
 ```
 
-![Dashboard Light Mode](screenshots/dashboard-light.png)
-*Dashboard in light mode - clean, modern interface*
-
-![Dashboard Dark Mode](screenshots/dashboard-dark.png)
-*Dashboard in dark mode - easy on the eyes for nighttime viewing*
-
 ---
 
 ## 🎛️ Dashboard Features
@@ -152,9 +151,6 @@ hostname -I
 - **Recent Aircraft List** - Last 10 detected aircraft with flight number, altitude, distance
 - **Auto-Refresh** - Updates every 5 seconds
 - **Interactive Map** - Embedded tar1090 map showing all aircraft
-
-![Recent Aircraft](screenshots/recent-aircraft.png)
-*Live aircraft list with real-time updates*
 
 ### Quick Stats
 - **Aircraft Count** - Total aircraft currently visible
@@ -167,12 +163,81 @@ hostname -I
 - **Station IDs** - All your UUIDs and keys with copy buttons
 
 ![Station IDs](screenshots/station-ids.png)
-*Easy access to all your station IDs with copy-to-clipboard buttons*
 
 ### Dark Mode
 - **Toggle Switch** - Click sun/moon icon in header
 - **Persistent** - Remembers your preference
 - **Optimized Colors** - Perfect contrast in both modes
+
+![Dashboard Light Mode](screenshots/dashboard-light.png)
+*Light mode is also available for daytime viewing*
+
+---
+
+## 📼 Flight Logger
+
+**NEW in v1.2.0!** Keep a record of every aircraft you track.
+
+![Flight Logger](screenshots/flight-logger.png)
+
+### What It Does
+
+- **Saves all aircraft positions** to a local SQLite database
+- **Configurable sample rate** (5-60 seconds)
+- **Auto-cleanup** - Keeps last 7/14/30 days or forever
+- **Export to CSV/JSON** - Download your data anytime
+- **Storage estimates** - Know how much space you'll need
+
+### Dashboard Integration
+
+The logger section appears in your dashboard with:
+- Real-time statistics (positions, aircraft, flights)
+- Storage usage bar
+- Settings controls (sample rate, retention)
+- Export/Clear buttons
+
+### Configuration
+
+During setup, you'll be asked:
+```
+Enable flight logging? (Y/n): y
+
+Sample rate:
+  1) 5 seconds  (~200MB/day)
+  2) 10 seconds (~100MB/day) [recommended]
+  3) 15 seconds (~70MB/day)
+  4) 30 seconds (~35MB/day)
+
+Keep data:
+  1) 7 days
+  2) 14 days [recommended]
+  3) 30 days
+  4) Forever
+```
+
+### Storage Estimates
+
+| Sample Rate | Per Day | 7 Days | 14 Days | 30 Days |
+|-------------|---------|--------|---------|---------|
+| 5 sec       | ~200MB  | 1.4GB  | 2.8GB   | 6GB     |
+| 10 sec      | ~100MB  | 700MB  | 1.4GB   | 3GB     |
+| 15 sec      | ~70MB   | 500MB  | 1GB     | 2GB     |
+| 30 sec      | ~35MB   | 250MB  | 500MB   | 1GB     |
+
+*Estimates based on ~50 aircraft average. Busy areas = more data.*
+
+### API Endpoints
+
+The logger also provides a REST API:
+```
+GET  /api/stats       - Statistics
+GET  /api/export      - Download CSV
+GET  /api/export/json - Download JSON
+GET  /api/flights     - Query flights
+GET  /api/trace/<icao> - Get flight path
+POST /api/pause       - Pause logging
+POST /api/resume      - Resume logging
+```
 
 ---
 
@@ -335,20 +400,21 @@ docker compose restart
 Run `./setup.sh` anytime to access the management menu:
 
 ```
-════════════════════════════════════════════
-  EasyADSB Management Menu
-════════════════════════════════════════════
-
-1) Restart all services
-2) View logs (all services)
-3) View logs (individual service)
-4) Update Docker images
-5) View current configuration
-6) Reconfigure everything (fresh setup)
-7) Update EasyADSB (pull from GitHub)
-8) Uninstall EasyADSB
-9) Exit
+  1) Restart services (keep config)
+  2) Reconfigure everything
+  3) Stop all services
+  4) View status & logs
+  5) Backup / Restore
+  6) Update EasyADSB (pull from GitHub)
+  7) Uninstall EasyADSB
+  8) Exit
 ```
+
+### View Status & Logs
+
+Choose option 4 to see container status, your station IDs, and logger stats:
+
+![Status & Logs](screenshots/status-logs.png)
 
 ### Update EasyADSB
 
@@ -372,25 +438,24 @@ Remove EasyADSB completely:
 
 ```bash
 ./setup.sh
-# Choose option 8 (Uninstall)
+# Choose option 7 (Uninstall)
 ```
 
-**What it removes:**
-- All Docker containers
-- Optionally: data volumes (/opt/adsb)
-- Optionally: config files (.env)
-- Does NOT remove: setup files (you can delete manually)
+![Uninstall Menu](screenshots/uninstall-menu.png)
+
+**Uninstall options:**
+- **Containers only** - Keeps data & config. Good for troubleshooting.
+- **Containers + flight logs** - Clears your logged flight history.
+- **Containers + all data** - Removes graphs, history, and flight logs.
+- **Complete removal** - Fresh start, you'll need to reconfigure.
 
 **Complete removal:**
 ```bash
 cd ~/easyadsb
-./setup.sh  # Choose option 8
+./setup.sh  # Choose option 7, then option 4
 cd ..
 rm -rf easyadsb
 ```
-
-![Service Management](screenshots/service-management.png)
-*Individual service management menu for granular control*
 
 ### Common Commands
 
@@ -650,14 +715,25 @@ Check your stats regularly:
 
 ### Backup Your Config
 
+**Easy way (recommended):**
 ```bash
-# Backup .env file
+./setup.sh
+# Choose option 5 (Backup / Restore)
+```
+
+![Backup Menu](screenshots/backup-menu.png)
+
+Backup options:
+- **Config only** (~1 KB) - Just .env and dashboard-config.js
+- **Config + flight logs** - Includes your flight history database
+- **Everything** - Config, flight logs, graphs, and all feeder data
+
+Backups are saved to your home directory as `easyadsb-*.tar.gz`
+
+**Manual backup:**
+```bash
 cp .env .env.backup
-
-# Backup dashboard config
 cp dashboard-config.js dashboard-config.js.backup
-
-# Keep these somewhere safe!
 ```
 
 ---
