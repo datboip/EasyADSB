@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 EasyADSB Flight Logger
-Version: 1.2.0
+Version: 1.2.1
 
 Polls ultrafeeder for aircraft data and stores in SQLite database.
 Provides REST API for dashboard integration.
@@ -11,6 +11,8 @@ Endpoints:
     GET  /api/stats        - Get logging statistics
     GET  /api/settings     - Get current settings
     POST /api/settings     - Update settings
+    GET  /api/userconfig   - Get user dashboard config (e.g., ADSBx Short ID)
+    POST /api/userconfig   - Update user dashboard config
     GET  /api/export       - Download logs as CSV
     GET  /api/export/json  - Download logs as JSON
     GET  /api/flights      - Query flights with filters
@@ -48,6 +50,7 @@ LOG_INTERVAL = int(os.getenv('LOG_INTERVAL', '10'))
 LOG_RETENTION_DAYS = int(os.getenv('LOG_RETENTION_DAYS', '14'))
 DB_PATH = os.getenv('DB_PATH', '/data/flights.db')
 CONFIG_PATH = os.getenv('CONFIG_PATH', '/data/config.json')
+USER_CONFIG_PATH = os.getenv('USER_CONFIG_PATH', '/data/user-config.json')
 
 # Runtime state
 logger_paused = False
@@ -316,6 +319,26 @@ def save_config():
     except Exception as e:
         log.warning(f"Could not save config: {e}")
 
+def load_user_config():
+    """Load user dashboard config from file."""
+    if os.path.exists(USER_CONFIG_PATH):
+        try:
+            with open(USER_CONFIG_PATH, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            log.warning(f"Could not load user config: {e}")
+    return {}
+
+def save_user_config(config):
+    """Save user dashboard config to file."""
+    try:
+        with open(USER_CONFIG_PATH, 'w') as f:
+            json.dump(config, f, indent=2)
+        return True
+    except Exception as e:
+        log.warning(f"Could not save user config: {e}")
+        return False
+
 # ══════════════════════════════════════════════════════════════════════════════
 # API ENDPOINTS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -390,6 +413,31 @@ def api_settings():
         'interval': LOG_INTERVAL,
         'retention_days': LOG_RETENTION_DAYS
     })
+
+@app.route('/api/userconfig', methods=['GET', 'POST', 'OPTIONS'])
+def api_userconfig():
+    """Get or update user dashboard config (e.g., ADSBx Short ID)."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    if request.method == 'GET':
+        config = load_user_config()
+        return jsonify(config)
+    
+    # POST - update user config
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+    
+    # Load existing config and merge with new data
+    config = load_user_config()
+    config.update(data)
+    
+    if save_user_config(config):
+        log.info(f"User config updated: {list(data.keys())}")
+        return jsonify({'success': True, 'config': config})
+    else:
+        return jsonify({'success': False, 'error': 'Could not save config'}), 500
 
 @app.route('/api/pause', methods=['POST', 'OPTIONS'])
 def api_pause():
@@ -672,7 +720,7 @@ def api_recent():
 
 if __name__ == '__main__':
     log.info("=" * 60)
-    log.info("EasyADSB Flight Logger v1.2.0")
+    log.info("EasyADSB Flight Logger v1.2.1")
     log.info("=" * 60)
     log.info(f"Ultrafeeder: {ULTRAFEEDER_HOST}:{ULTRAFEEDER_PORT}")
     log.info(f"Interval: {LOG_INTERVAL} seconds")

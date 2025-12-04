@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # EasyADSB - Automated ADS-B Multi-Feeder Setup
-# Version: 1.2.0
+# Version: 1.2.1
 # Last Updated: 2025-11-30
 # 
 # One-command setup for 6 ADS-B flight tracking networks
@@ -103,7 +103,7 @@ find_available_port() {
 clear
 echo ""
 echo "════════════════════════════════════════════════════════════════════════════════"
-echo "              EasyADSB Setup v1.2.0 (15-20 mins)"
+echo "              EasyADSB Setup v1.2.1 (15-20 mins)"
 echo "════════════════════════════════════════════════════════════════════════════════"
 echo ""
 
@@ -119,10 +119,12 @@ if [ -f ".env" ]; then
     echo "  4) View status & logs"
     echo "  5) Backup / Restore"
     echo "  6) Update EasyADSB (pull from GitHub)"
-    echo "  7) Uninstall EasyADSB"
-    echo "  8) Exit"
+    echo "  7) Rebuild local changes"
+    echo "  8) Uninstall EasyADSB"
     echo ""
-    read -p "Choice [1-8]: " choice
+    echo "  0) Exit"
+    echo ""
+    read -p "Choice [0-8]: " choice
     
     case $choice in
         1)
@@ -833,6 +835,77 @@ JSEOF
             exec "$0"
             ;;
         7)
+            # Rebuild local changes
+            echo ""
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo "  Rebuild Local Changes"
+            echo "════════════════════════════════════════════════════════════════════════════════"
+            echo ""
+            echo "This will rebuild containers from your local files."
+            echo "Use this after manually editing:"
+            echo "  • dashboard.html"
+            echo "  • logger/app.py"
+            echo "  • docker-compose.yml"
+            echo ""
+            read -p "Rebuild and restart all services? (y/n): " -n 1 -r
+            echo ""
+            
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo ""
+                
+                # Regenerate dashboard config
+                if [ -f ".env" ]; then
+                    echo "Regenerating dashboard config..."
+                    ADSBX_UUID=$(grep "^ADSBX_UUID=" .env | cut -d'=' -f2)
+                    MULTIFEEDER_UUID=$(grep "^MULTIFEEDER_UUID=" .env | cut -d'=' -f2)
+                    FR24KEY=$(grep "^FR24KEY=" .env | cut -d'=' -f2)
+                    RADARBOX_KEY=$(grep "^RADARBOX_KEY=" .env | cut -d'=' -f2)
+                    RADARBOX_SERIAL=$(grep "^RADARBOX_SERIAL=" .env | cut -d'=' -f2)
+                    PIAWARE_FEEDER_ID=$(grep "^PIAWARE_FEEDER_ID=" .env | cut -d'=' -f2)
+                    FEEDER_NAME=$(grep "^FEEDER_NAME=" .env | cut -d'=' -f2)
+                    LOGGER_PORT=$(grep "^LOGGER_PORT=" .env | cut -d'=' -f2)
+                    LOGGER_PORT=${LOGGER_PORT:-8082}
+                    
+                    cat > dashboard-config.js << JSEOF
+// Auto-generated configuration for EasyADSB Dashboard
+// Generated: $(date)
+window.FEEDER_CONFIG = {
+    adsbxUUID: "${ADSBX_UUID}",
+    adsblolUUID: "${MULTIFEEDER_UUID}",
+    fr24Key: "${FR24KEY}",
+    radarboxKey: "${RADARBOX_KEY}",
+    radarboxSerial: "${RADARBOX_SERIAL}",
+    piawareID: "${PIAWARE_FEEDER_ID}",
+    feederName: "${FEEDER_NAME}",
+    loggerPort: ${LOGGER_PORT}
+};
+JSEOF
+                    echo -e "${GREEN}✓${NC} Dashboard config regenerated"
+                fi
+                
+                # Rebuild and restart
+                echo ""
+                echo "Rebuilding containers..."
+                LOG_ENABLED=$(grep "^LOG_ENABLED=" .env 2>/dev/null | cut -d'=' -f2)
+                
+                if [ "$LOG_ENABLED" = "true" ] && [ -d "logger" ]; then
+                    docker compose --profile logging up -d --build
+                else
+                    docker compose up -d --build
+                fi
+                
+                echo ""
+                echo -e "${GREEN}✓${NC} Rebuild complete!"
+                MY_IP=$(hostname -I | awk '{print $1}')
+                DASHBOARD_PORT=$(grep "^DASHBOARD_PORT=" .env 2>/dev/null | cut -d'=' -f2)
+                DASHBOARD_PORT=${DASHBOARD_PORT:-8081}
+                echo "  Dashboard: http://$MY_IP:$DASHBOARD_PORT"
+            fi
+            echo ""
+            read -p "Press Enter to continue..."
+            exec "$0"
+            ;;
+        8)
             # Uninstall EasyADSB
             echo ""
             echo "════════════════════════════════════════════════════════════════════════════════"
@@ -920,14 +993,14 @@ JSEOF
                     ;;
             esac
             ;;
-        8)
+        0)
             echo ""
             echo "Exiting."
             exit 0
             ;;
         *)
-            echo "Invalid choice. Exiting."
-            exit 1
+            echo "Invalid choice."
+            exec "$0"
             ;;
     esac
 fi
@@ -2013,7 +2086,7 @@ RADARBOX_KEY=$RADARBOX_KEY
 RADARBOX_SERIAL=$RADARBOX_SERIAL
 PIAWARE_FEEDER_ID=$PIAWARE_FEEDER_ID
 
-ULTRAFEEDER_CONFIG=adsb,feed.flightradar24.com,30004,beast_reduce_plus_out,uuid=${FR24KEY};adsb,feed.adsbexchange.com,30004,beast_reduce_plus_out,uuid=${ADSBX_UUID};mlat,in.adsb.lol,31090,uuid=${MULTIFEEDER_UUID}
+ULTRAFEEDER_CONFIG=adsb,feed.flightradar24.com,30004,beast_reduce_plus_out,uuid=${FR24KEY};adsb,feed.adsbexchange.com,30004,beast_reduce_plus_out,uuid=${ADSBX_UUID};adsb,in.adsb.lol,30004,beast_reduce_plus_out;adsb,feed.adsb.fi,30004,beast_reduce_plus_out;adsb,feed.planespotters.net,30004,beast_reduce_plus_out;mlat,feed.adsbexchange.com,31090,39008,uuid=${ADSBX_UUID};mlat,in.adsb.lol,31090,39008,uuid=${MULTIFEEDER_UUID};mlat,feed.adsb.fi,31090,39008;mlat,mlat.planespotters.net,31090,39008
 
 # Port Configuration
 DASHBOARD_PORT=$DASHBOARD_PORT
@@ -2038,6 +2111,7 @@ window.FEEDER_CONFIG = {
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
     piawareID: "${PIAWARE_FEEDER_ID}",
+    feederName: "${FEEDER_NAME}",
     loggerPort: ${LOGGER_PORT}
 };
 JSEOF

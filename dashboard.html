@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   EasyADSB Dashboard
-  Version: 1.2.0
+  Version: 1.2.1
   Last Updated: 2025-11-29
   
   An automated multi-feeder setup for ADS-B enthusiasts
@@ -22,7 +22,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EasyADSB Dashboard v1.0.0</title>
+    <title>EasyADSB Dashboard v1.2.1</title>
     <style>
         :root {
             --bg-gradient-start: #667eea;
@@ -78,7 +78,11 @@
             text-align: center;
             color: white;
             margin-bottom: 30px;
-            position: relative;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 20px 0;
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
         }
 
         .header-buttons {
@@ -311,6 +315,228 @@
             color: #a5b4fc;
         }
 
+        /* Live Aircraft Table */
+        .aircraft-table-wrapper {
+            overflow-x: auto;
+        }
+
+        .aircraft-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+
+        .aircraft-table th {
+            text-align: left;
+            padding: 8px 6px;
+            font-size: 0.75em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        .aircraft-table td {
+            padding: 8px 6px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            white-space: nowrap;
+        }
+
+        .aircraft-table tr:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .aircraft-table .callsign {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .aircraft-table .hex-link {
+            color: var(--text-secondary);
+            font-size: 0.8em;
+            text-decoration: none;
+            font-family: monospace;
+        }
+
+        .aircraft-table .hex-link:hover {
+            color: var(--accent-color);
+            text-decoration: underline;
+        }
+
+        .aircraft-table .type {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        .aircraft-table .climbing {
+            color: #22c55e;
+        }
+
+        .aircraft-table .descending {
+            color: #f97316;
+        }
+
+        .aircraft-table .accelerating {
+            color: #3b82f6;  /* Blue for speeding up */
+        }
+
+        .aircraft-table .decelerating {
+            color: #a855f7;  /* Purple for slowing down */
+        }
+
+        .aircraft-table .flag {
+            margin-right: 4px;
+        }
+
+        /* Freshness/Age colors */
+        .age-fresh { color: #22c55e; }      /* Green: 0-10s */
+        .age-stale { color: #eab308; }      /* Yellow: 11-30s */
+        .age-old { color: #f97316; }        /* Orange: 31-60s */
+        .age-lost { color: #ef4444; }       /* Red: 61-120s */
+        .age-gone { color: #6b7280; }       /* Gray/dark: 120s+ */
+
+        /* Units Toggle */
+        .units-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75em;
+            color: var(--text-secondary);
+        }
+
+        .units-toggle-switch {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .units-toggle-switch.active {
+            background: var(--accent-color);
+        }
+
+        .units-toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            transition: left 0.2s;
+        }
+
+        .units-toggle-switch.active::after {
+            left: 18px;
+        }
+
+        /* Update Toast */
+        .update-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            font-size: 0.9em;
+            cursor: default;
+        }
+
+        .update-toast.show {
+            display: flex;
+        }
+
+        .update-toast-close {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .update-toast-close:hover {
+            background: rgba(255,255,255,0.4);
+        }
+
+        .update-toast-content {
+            position: relative;
+        }
+
+        .update-toast-mobile-hint {
+            display: none;
+            font-size: 0.8em;
+            opacity: 0.9;
+        }
+
+        .update-tooltip {
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            margin-bottom: 10px;
+            background: var(--card-bg);
+            color: var(--text-primary);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            white-space: nowrap;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+
+        @media (max-width: 768px) {
+            .update-toast {
+                left: 20px;
+                right: 20px;
+                flex-direction: column;
+                text-align: center;
+                gap: 8px;
+            }
+            .update-toast-mobile-hint {
+                display: block;
+            }
+            .update-tooltip {
+                display: none;
+            }
+            .update-toast-close {
+                position: absolute;
+                top: -8px;
+                right: -8px;
+            }
+        }
+
+        .update-toast:hover .update-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .update-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            right: 20px;
+            border: 6px solid transparent;
+            border-top-color: var(--card-bg);
+        }
+
         /* Tip boxes */
         .tip-box {
             margin-bottom: 15px;
@@ -495,18 +721,28 @@
             }
             
             .header {
-                padding-bottom: 20px;
+                padding: 15px 0;
+                margin-bottom: 20px;
             }
             
             .header h1 {
-                font-size: 1.5em;
+                font-size: 1.3em;
                 padding-right: 0;
+            }
+            
+            .header p {
+                font-size: 0.85em;
             }
             
             .header-buttons {
                 position: static !important;
                 justify-content: center;
-                margin-top: 15px;
+                margin-top: 10px;
+            }
+            
+            .header-btn {
+                padding: 8px 12px;
+                font-size: 1em;
             }
             
             .card {
@@ -521,6 +757,15 @@
             /* Logger stats 2x2 grid on mobile */
             .logger-stats-grid {
                 grid-template-columns: repeat(2, 1fr) !important;
+            }
+            
+            /* Live aircraft table scrolls horizontally on mobile */
+            .aircraft-table-wrapper {
+                overflow-x: auto;
+            }
+            
+            .aircraft-table {
+                min-width: 500px;
             }
         }
         
@@ -778,8 +1023,12 @@
                     Global unfiltered flight tracking.
                     <div class="card-links">
                         <a href="https://www.adsbexchange.com/myip/" target="_blank" class="card-link">My Stats</a>
-                        <button onclick="openAdsbxMap()" class="card-link secondary">Map</button>
-                        <button onclick="openAdsbxCoverage()" class="card-link secondary">Coverage Stats</button>
+                        <button onclick="openAdsbxMap()" class="card-link secondary">My Feed</button>
+                        <button onclick="openAdsbxCoverage()" class="card-link secondary">Coverage</button>
+                    </div>
+                    <div class="card-links" style="margin-top: 8px;">
+                        <button onclick="openAdsbxLeaderboard()" class="card-link secondary">Leaderboard</button>
+                        <button onclick="openAdsbxMLATSync()" class="card-link secondary">MLAT Sync</button>
                     </div>
                 </div>
             </div>
@@ -897,20 +1146,29 @@
                 </div>
                 <div class="stat-box" style="border-left: 4px solid #3b82f6;">
                     <div class="stat-value" id="range-max">-</div>
-                    <div class="stat-label">📏 Max Range (nm)</div>
+                    <div class="stat-label" style="cursor: pointer;" onclick="toggleRangeUnits()" title="Click to change units">📏 Max Range (<span id="range-unit">nm</span>)</div>
                 </div>
             </div>
         </div>
 
-        <!-- Recent Aircraft -->
+        <!-- Live Aircraft -->
         <div class="card" style="margin-top: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2 style="margin: 0;">✈️ Recent Aircraft</h2>
-                <span id="aircraft-update-time" style="font-size: 0.75em; color: var(--text-secondary);"></span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="margin: 0;">📡 Live Aircraft <span id="aircraft-count-badge" style="font-size: 0.5em; background: rgba(102,126,234,0.2); padding: 4px 10px; border-radius: 12px; vertical-align: middle;"></span></h2>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div class="units-toggle">
+                        <span>kt/nm</span>
+                        <div id="units-toggle-switch" class="units-toggle-switch" onclick="toggleUnits()" title="Toggle units"></div>
+                        <span>mph/mi</span>
+                    </div>
+                    <span id="aircraft-update-time" style="font-size: 0.75em; color: var(--text-secondary);"></span>
+                </div>
             </div>
-            <div id="recent-aircraft" style="max-height: 300px; overflow-y: auto; font-size: 0.9em;">
-                <div style="color: var(--text-secondary); text-align: center; padding: 20px;">
-                    Loading aircraft data...
+            <div class="aircraft-table-wrapper">
+                <div id="live-aircraft" style="max-height: 350px; overflow-y: auto;">
+                    <div style="color: var(--text-secondary); text-align: center; padding: 20px;">
+                        Loading aircraft data...
+                    </div>
                 </div>
             </div>
         </div>
@@ -1077,10 +1335,22 @@
 
         <!-- Version Footer -->
         <div class="footer">
-            EasyADSB v1.2.0 | 
+            EasyADSB v1.2.1 | 
             <a href="https://github.com/datboip/easyadsb" target="_blank">⭐ GitHub</a> | 
             Built with <a href="https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder" target="_blank">ultrafeeder</a>
         </div>
+    </div>
+
+    <!-- Update Toast -->
+    <div id="update-toast" class="update-toast">
+        <div class="update-toast-content">
+            <span>⬆️ <span id="update-version">v1.2.2</span> available</span>
+            <div class="update-toast-mobile-hint">Run ./setup.sh option 6</div>
+            <div class="update-tooltip">
+                Run <strong>./setup.sh</strong> option 6 to update
+            </div>
+        </div>
+        <button class="update-toast-close" onclick="dismissUpdate()" title="Dismiss">✕</button>
     </div>
 
     <!-- Short ID Input Modal -->
@@ -1277,14 +1547,50 @@
         
         // Try to load from generated config file
         if (typeof window.FEEDER_CONFIG !== 'undefined') {
-            config = window.FEEDER_CONFIG;
-            localStorage.setItem('adsbConfig', JSON.stringify(config));
-        } else {
-            // Fall back to localStorage
-            const saved = localStorage.getItem('adsbConfig');
-            if (saved) {
-                config = JSON.parse(saved);
+            config = { ...window.FEEDER_CONFIG };
+        }
+        
+        // Load user config from localStorage as fallback
+        const savedLocal = localStorage.getItem('adsbConfig');
+        if (savedLocal) {
+            const localConfig = JSON.parse(savedLocal);
+            // Merge localStorage values (for backwards compatibility)
+            if (localConfig.adsbxShortID) config.adsbxShortID = localConfig.adsbxShortID;
+        }
+
+        // Load user config from server (will override localStorage)
+        const LOGGER_PORT = window.FEEDER_CONFIG?.loggerPort || 8082;
+        async function loadUserConfig() {
+            try {
+                const response = await fetch(`http://${location.hostname}:${LOGGER_PORT}/api/userconfig`);
+                if (response.ok) {
+                    const userConfig = await response.json();
+                    // Merge server config into our config
+                    if (userConfig.adsbxShortID) config.adsbxShortID = userConfig.adsbxShortID;
+                    console.log('Loaded user config from server:', userConfig);
+                }
+            } catch (e) {
+                console.log('Could not load user config from server, using localStorage');
             }
+        }
+        loadUserConfig();
+
+        // Save user config to server
+        async function saveUserConfig(key, value) {
+            try {
+                const response = await fetch(`http://${location.hostname}:${LOGGER_PORT}/api/userconfig`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [key]: value })
+                });
+                if (response.ok) {
+                    console.log(`Saved ${key} to server`);
+                    return true;
+                }
+            } catch (e) {
+                console.log('Could not save to server, saving to localStorage only');
+            }
+            return false;
         }
 
         // ADSBexchange Map - requires Short ID
@@ -1305,6 +1611,31 @@
             } else {
                 const timestamp = Date.now();
                 window.open(`https://www.adsbexchange.com/api/feeders/?feed=${shortId}&t=${timestamp}`, '_blank');
+            }
+        }
+
+        // ADSBexchange Leaderboard - uses Feeder Name or Short ID
+        function openAdsbxLeaderboard() {
+            let feederName = config.feederName;
+            let shortId = config.adsbxShortID;
+            
+            if (feederName && feederName !== '') {
+                window.open(`https://globe.adsbexchange.com/leaderboard/?feed=${feederName}`, '_blank');
+            } else if (shortId && shortId !== '') {
+                window.open(`https://globe.adsbexchange.com/leaderboard/?feed=${shortId}`, '_blank');
+            } else {
+                showShortIdModal('leaderboard');
+            }
+        }
+
+        // ADSBexchange MLAT Sync Status - uses Feeder Name
+        function openAdsbxMLATSync() {
+            let feederName = config.feederName;
+            
+            if (feederName && feederName !== '') {
+                window.open(`https://map.adsbexchange.com/sync/feeder.html?4&${feederName}`, '_blank');
+            } else {
+                alert('Feeder name not configured.\n\nRun ./setup.sh and reconfigure to set your feeder name.');
             }
         }
 
@@ -1395,13 +1726,21 @@
             const shortId = document.getElementById('shortIdInput').value.trim();
             if (shortId) {
                 config.adsbxShortID = shortId;
+                
+                // Save to localStorage (fallback)
                 localStorage.setItem('adsbConfig', JSON.stringify(config));
+                
+                // Save to server (persists across browsers)
+                saveUserConfig('adsbxShortID', shortId);
+                
                 closeShortIdModal();
                 
                 // Open appropriate URL based on context
                 const timestamp = Date.now();
                 if (shortIdModalContext === 'map') {
                     window.open(`https://globe.adsbexchange.com/?feed=${shortId}`, '_blank');
+                } else if (shortIdModalContext === 'leaderboard') {
+                    window.open(`https://globe.adsbexchange.com/leaderboard/?feed=${shortId}`, '_blank');
                 } else {
                     window.open(`https://www.adsbexchange.com/api/feeders/?feed=${shortId}&t=${timestamp}`, '_blank');
                 }
@@ -1425,6 +1764,24 @@
         });
 
         // Fetch stats from tar1090
+        // Track previous values for rate calculation
+        let prevMessages = null;
+        let prevMsgTime = null;
+        let prevAircraftSpeeds = {}; // Track previous speeds by hex for trend arrows
+        let rangeUnit = localStorage.getItem('rangeUnit') || 'nm'; // nm, mi, km
+
+        function toggleRangeUnits() {
+            const units = ['nm', 'mi', 'km'];
+            const currentIndex = units.indexOf(rangeUnit);
+            rangeUnit = units[(currentIndex + 1) % units.length];
+            localStorage.setItem('rangeUnit', rangeUnit);
+            document.getElementById('range-unit').textContent = rangeUnit;
+            updateStats(); // Refresh with new units
+        }
+
+        // Initialize range unit display
+        document.getElementById('range-unit').textContent = rangeUnit;
+
         async function updateStats() {
             try {
                 const response = await fetch(`${tar1090URL}data/aircraft.json`);
@@ -1432,16 +1789,43 @@
                 
                 const aircraftCount = data.aircraft?.length || 0;
                 document.getElementById('aircraft-count').textContent = aircraftCount;
-                document.getElementById('messages-count').textContent = (data.messages / 1000).toFixed(1) + 'k';
                 
-                // Calculate max range
+                // Calculate actual messages per second
+                const currentMessages = data.messages || 0;
+                const currentTime = Date.now();
+                
+                if (prevMessages !== null && prevMsgTime !== null) {
+                    const elapsed = (currentTime - prevMsgTime) / 1000; // seconds
+                    if (elapsed > 0) {
+                        const rate = (currentMessages - prevMessages) / elapsed;
+                        if (rate >= 1000) {
+                            document.getElementById('messages-count').textContent = (rate / 1000).toFixed(1) + 'k';
+                        } else {
+                            document.getElementById('messages-count').textContent = Math.round(rate);
+                        }
+                    }
+                } else {
+                    document.getElementById('messages-count').textContent = '-';
+                }
+                prevMessages = currentMessages;
+                prevMsgTime = currentTime;
+                
+                // Calculate max range with unit conversion
                 let maxRange = 0;
                 data.aircraft?.forEach(ac => {
                     if (ac.seen_pos < 60 && ac.r_dst) {
                         maxRange = Math.max(maxRange, ac.r_dst);
                     }
                 });
-                document.getElementById('range-max').textContent = maxRange > 0 ? maxRange.toFixed(1) : '-';
+                
+                // Convert range based on selected unit
+                let displayRange = maxRange;
+                if (rangeUnit === 'mi') {
+                    displayRange = maxRange * 1.15078; // nm to miles
+                } else if (rangeUnit === 'km') {
+                    displayRange = maxRange * 1.852; // nm to km
+                }
+                document.getElementById('range-max').textContent = displayRange > 0 ? displayRange.toFixed(1) : '-';
                 
                 // Update timestamp
                 const now = new Date();
@@ -1493,49 +1877,451 @@
             document.getElementById('ref-piaware').textContent = config.piawareID || 'Not configured';
         }
 
-        // Update recent aircraft list
-        async function updateRecentAircraft() {
+        // Country flag lookup from ICAO hex prefix
+        function getCountryFlag(hex) {
+            if (!hex) return '';
+            const h = hex.toUpperCase();
+            
+            // Comprehensive ICAO hex ranges (official allocations)
+            // Source: ICAO Doc 8585 / Various aviation databases
+            
+            // ═══════════════════════════════════════════════════════════
+            // AFRICA (0x000000 - 0x0FFFFF partial)
+            // ═══════════════════════════════════════════════════════════
+            if (h >= '004000' && h <= '0043FF') return '🇿🇼';  // Zimbabwe
+            if (h >= '006000' && h <= '006FFF') return '🇲🇿';  // Mozambique
+            if (h >= '008000' && h <= '00FFFF') return '🇿🇦';  // South Africa
+            if (h >= '010000' && h <= '017FFF') return '🇪🇬';  // Egypt
+            if (h >= '018000' && h <= '01FFFF') return '🇱🇾';  // Libya
+            if (h >= '020000' && h <= '027FFF') return '🇲🇦';  // Morocco
+            if (h >= '028000' && h <= '02FFFF') return '🇹🇳';  // Tunisia
+            if (h >= '030000' && h <= '0303FF') return '🇧🇼';  // Botswana
+            if (h >= '032000' && h <= '032FFF') return '🇧🇮';  // Burundi
+            if (h >= '034000' && h <= '034FFF') return '🇨🇲';  // Cameroon
+            if (h >= '036000' && h <= '036FFF') return '🇨🇬';  // Congo
+            if (h >= '038000' && h <= '038FFF') return '🇨🇮';  // Côte d'Ivoire
+            if (h >= '03E000' && h <= '03EFFF') return '🇬🇦';  // Gabon
+            if (h >= '040000' && h <= '040FFF') return '🇪🇹';  // Ethiopia
+            if (h >= '042000' && h <= '042FFF') return '🇬🇶';  // Equatorial Guinea
+            if (h >= '044000' && h <= '044FFF') return '🇬🇭';  // Ghana
+            if (h >= '046000' && h <= '046FFF') return '🇬🇳';  // Guinea
+            if (h >= '048000' && h <= '0483FF') return '🇬🇼';  // Guinea-Bissau
+            if (h >= '04A000' && h <= '04A3FF') return '🇱🇸';  // Lesotho
+            if (h >= '04C000' && h <= '04CFFF') return '🇰🇪';  // Kenya
+            if (h >= '050000' && h <= '050FFF') return '🇱🇷';  // Liberia
+            if (h >= '054000' && h <= '054FFF') return '🇲🇬';  // Madagascar
+            if (h >= '058000' && h <= '058FFF') return '🇲🇼';  // Malawi
+            if (h >= '05A000' && h <= '05A3FF') return '🇲🇻';  // Maldives
+            if (h >= '05C000' && h <= '05CFFF') return '🇲🇱';  // Mali
+            if (h >= '05E000' && h <= '05E3FF') return '🇲🇷';  // Mauritania
+            if (h >= '060000' && h <= '0603FF') return '🇲🇺';  // Mauritius
+            if (h >= '062000' && h <= '062FFF') return '🇳🇪';  // Niger
+            if (h >= '064000' && h <= '064FFF') return '🇳🇬';  // Nigeria
+            if (h >= '068000' && h <= '068FFF') return '🇺🇬';  // Uganda
+            if (h >= '06A000' && h <= '06A3FF') return '🇶🇦';  // Qatar
+            if (h >= '06C000' && h <= '06CFFF') return '🇨🇫';  // Central African Republic
+            if (h >= '06E000' && h <= '06EFFF') return '🇷🇼';  // Rwanda
+            if (h >= '070000' && h <= '070FFF') return '🇸🇳';  // Senegal
+            if (h >= '074000' && h <= '0743FF') return '🇸🇨';  // Seychelles
+            if (h >= '076000' && h <= '0763FF') return '🇸🇱';  // Sierra Leone
+            if (h >= '078000' && h <= '078FFF') return '🇸🇴';  // Somalia
+            if (h >= '07A000' && h <= '07A3FF') return '🇸🇿';  // Eswatini
+            if (h >= '07C000' && h <= '07CFFF') return '🇸🇩';  // Sudan
+            if (h >= '080000' && h <= '080FFF') return '🇹🇿';  // Tanzania
+            if (h >= '084000' && h <= '084FFF') return '🇹🇩';  // Chad
+            if (h >= '088000' && h <= '088FFF') return '🇹🇬';  // Togo
+            if (h >= '08A000' && h <= '08AFFF') return '🇿🇲';  // Zambia
+            if (h >= '08C000' && h <= '08CFFF') return '🇨🇩';  // DR Congo
+            if (h >= '090000' && h <= '090FFF') return '🇦🇴';  // Angola
+            if (h >= '094000' && h <= '0943FF') return '🇧🇯';  // Benin
+            if (h >= '096000' && h <= '0963FF') return '🇨🇻';  // Cape Verde
+            if (h >= '098000' && h <= '0983FF') return '🇩🇯';  // Djibouti
+            if (h >= '09A000' && h <= '09AFFF') return '🇬🇲';  // Gambia
+            if (h >= '09C000' && h <= '09CFFF') return '🇧🇫';  // Burkina Faso
+            if (h >= '09E000' && h <= '09E3FF') return '🇸🇹';  // São Tomé
+            if (h >= '0A0000' && h <= '0A7FFF') return '🇩🇿';  // Algeria
+            
+            // ═══════════════════════════════════════════════════════════
+            // AMERICAS - CARIBBEAN & CENTRAL (0x0A8000 - 0x0FFFFF)
+            // ═══════════════════════════════════════════════════════════
+            if (h >= '0A8000' && h <= '0A8FFF') return '🇧🇸';  // Bahamas
+            if (h >= '0AA000' && h <= '0AA3FF') return '🇧🇧';  // Barbados
+            if (h >= '0AB000' && h <= '0AB3FF') return '🇧🇿';  // Belize
+            if (h >= '0AC000' && h <= '0ACFFF') return '🇨🇴';  // Colombia
+            if (h >= '0AE000' && h <= '0AEFFF') return '🇨🇷';  // Costa Rica
+            if (h >= '0B0000' && h <= '0B0FFF') return '🇨🇺';  // Cuba
+            if (h >= '0B2000' && h <= '0B2FFF') return '🇸🇻';  // El Salvador
+            if (h >= '0B4000' && h <= '0B4FFF') return '🇬🇹';  // Guatemala
+            if (h >= '0B6000' && h <= '0B6FFF') return '🇬🇾';  // Guyana
+            if (h >= '0B8000' && h <= '0B8FFF') return '🇭🇹';  // Haiti
+            if (h >= '0BA000' && h <= '0BAFFF') return '🇭🇳';  // Honduras
+            if (h >= '0BC000' && h <= '0BCFFF') return '🇻🇨';  // St Vincent
+            if (h >= '0BE000' && h <= '0BEFFF') return '🇯🇲';  // Jamaica
+            if (h >= '0C0000' && h <= '0C0FFF') return '🇳🇮';  // Nicaragua
+            if (h >= '0C2000' && h <= '0C2FFF') return '🇵🇦';  // Panama
+            if (h >= '0C4000' && h <= '0C4FFF') return '🇩🇴';  // Dominican Republic
+            if (h >= '0C6000' && h <= '0C6FFF') return '🇹🇹';  // Trinidad and Tobago
+            if (h >= '0C8000' && h <= '0C8FFF') return '🇸🇷';  // Suriname
+            if (h >= '0CA000' && h <= '0CA3FF') return '🇦🇬';  // Antigua and Barbuda
+            if (h >= '0CC000' && h <= '0CC3FF') return '🇬🇩';  // Grenada
+            if (h >= '0D0000' && h <= '0D7FFF') return '🇲🇽';  // Mexico
+            if (h >= '0D8000' && h <= '0DFFFF') return '🇻🇪';  // Venezuela
+            
+            // ═══════════════════════════════════════════════════════════
+            // RUSSIA & CIS (0x100000 - 0x1FFFFF)
+            // ═══════════════════════════════════════════════════════════
+            if (h >= '100000' && h <= '1FFFFF') return '🇷🇺';  // Russia
+            
+            // ═══════════════════════════════════════════════════════════
+            // EUROPE (0x300000 - 0x5FFFFF)
+            // ═══════════════════════════════════════════════════════════
+            if (h >= '300000' && h <= '33FFFF') return '🇮🇹';  // Italy
+            if (h >= '340000' && h <= '37FFFF') return '🇪🇸';  // Spain
+            if (h >= '380000' && h <= '3BFFFF') return '🇫🇷';  // France
+            if (h >= '3C0000' && h <= '3FFFFF') return '🇩🇪';  // Germany
+            if (h >= '400000' && h <= '43FFFF') return '🇬🇧';  // United Kingdom
+            if (h >= '440000' && h <= '447FFF') return '🇦🇹';  // Austria
+            if (h >= '448000' && h <= '44FFFF') return '🇧🇪';  // Belgium
+            if (h >= '450000' && h <= '457FFF') return '🇧🇬';  // Bulgaria
+            if (h >= '458000' && h <= '45FFFF') return '🇩🇰';  // Denmark
+            if (h >= '460000' && h <= '467FFF') return '🇫🇮';  // Finland
+            if (h >= '468000' && h <= '46FFFF') return '🇬🇷';  // Greece
+            if (h >= '470000' && h <= '477FFF') return '🇭🇺';  // Hungary
+            if (h >= '478000' && h <= '47FFFF') return '🇳🇴';  // Norway
+            if (h >= '480000' && h <= '487FFF') return '🇳🇱';  // Netherlands
+            if (h >= '488000' && h <= '48FFFF') return '🇵🇱';  // Poland
+            if (h >= '490000' && h <= '497FFF') return '🇵🇹';  // Portugal
+            if (h >= '498000' && h <= '49FFFF') return '🇨🇿';  // Czech Republic
+            if (h >= '4A0000' && h <= '4A7FFF') return '🇷🇴';  // Romania
+            if (h >= '4A8000' && h <= '4AFFFF') return '🇸🇪';  // Sweden
+            if (h >= '4B0000' && h <= '4B7FFF') return '🇨🇭';  // Switzerland
+            if (h >= '4B8000' && h <= '4BFFFF') return '🇹🇷';  // Turkey
+            if (h >= '4C0000' && h <= '4C7FFF') return '🇷🇸';  // Serbia
+            if (h >= '4C8000' && h <= '4C83FF') return '🇨🇾';  // Cyprus
+            if (h >= '4CA000' && h <= '4CAFFF') return '🇮🇪';  // Ireland
+            if (h >= '4CC000' && h <= '4CCFFF') return '🇮🇸';  // Iceland
+            if (h >= '4D0000' && h <= '4D03FF') return '🇱🇺';  // Luxembourg
+            if (h >= '4D2000' && h <= '4D23FF') return '🇲🇹';  // Malta
+            if (h >= '4D4000' && h <= '4D43FF') return '🇲🇨';  // Monaco
+            if (h >= '500000' && h <= '5003FF') return '🇸🇲';  // San Marino
+            if (h >= '501000' && h <= '5013FF') return '🇦🇱';  // Albania
+            if (h >= '501C00' && h <= '501FFF') return '🇭🇷';  // Croatia
+            if (h >= '502C00' && h <= '502FFF') return '🇱🇻';  // Latvia
+            if (h >= '503C00' && h <= '503FFF') return '🇱🇹';  // Lithuania
+            if (h >= '504C00' && h <= '504FFF') return '🇲🇩';  // Moldova
+            if (h >= '505C00' && h <= '505FFF') return '🇸🇰';  // Slovakia
+            if (h >= '506C00' && h <= '506FFF') return '🇸🇮';  // Slovenia
+            if (h >= '507C00' && h <= '507FFF') return '🇺🇿';  // Uzbekistan
+            if (h >= '508000' && h <= '50FFFF') return '🇺🇦';  // Ukraine
+            if (h >= '510000' && h <= '5103FF') return '🇧🇾';  // Belarus
+            if (h >= '511000' && h <= '5113FF') return '🇪🇪';  // Estonia
+            if (h >= '512000' && h <= '5123FF') return '🇲🇰';  // North Macedonia
+            if (h >= '513000' && h <= '5133FF') return '🇧🇦';  // Bosnia and Herzegovina
+            if (h >= '514000' && h <= '5143FF') return '🇬🇪';  // Georgia
+            if (h >= '515000' && h <= '5153FF') return '🇹🇯';  // Tajikistan
+            if (h >= '516000' && h <= '5163FF') return '🇲🇪';  // Montenegro
+            
+            // ═══════════════════════════════════════════════════════════
+            // ASIA & MIDDLE EAST (0x600000 - 0x8FFFFF)
+            // ═══════════════════════════════════════════════════════════
+            if (h >= '600000' && h <= '6003FF') return '🇦🇲';  // Armenia
+            if (h >= '600800' && h <= '600BFF') return '🇦🇿';  // Azerbaijan
+            if (h >= '601000' && h <= '6013FF') return '🇰🇬';  // Kyrgyzstan
+            if (h >= '601800' && h <= '601BFF') return '🇹🇲';  // Turkmenistan
+            if (h >= '680000' && h <= '6803FF') return '🇧🇹';  // Bhutan
+            if (h >= '681000' && h <= '6813FF') return '🇫🇲';  // Micronesia
+            if (h >= '682000' && h <= '6823FF') return '🇲🇳';  // Mongolia
+            if (h >= '683000' && h <= '6833FF') return '🇰🇿';  // Kazakhstan
+            if (h >= '684000' && h <= '6843FF') return '🇵🇼';  // Palau
+            if (h >= '688000' && h <= '68FFFF') return '🇦🇫';  // Afghanistan
+            if (h >= '690000' && h <= '6903FF') return '🇧🇩';  // Bangladesh
+            if (h >= '698000' && h <= '6983FF') return '🇲🇲';  // Myanmar
+            if (h >= '6A0000' && h <= '6A3FFF') return '🇰🇼';  // Kuwait
+            if (h >= '6A8000' && h <= '6A8FFF') return '🇱🇦';  // Laos
+            if (h >= '6B0000' && h <= '6B0FFF') return '🇳🇵';  // Nepal
+            if (h >= '6B8000' && h <= '6B8FFF') return '🇴🇲';  // Oman
+            if (h >= '6C0000' && h <= '6C0FFF') return '🇰🇭';  // Cambodia
+            if (h >= '6C8000' && h <= '6C8FFF') return '🇸🇦';  // Saudi Arabia
+            if (h >= '6D0000' && h <= '6D3FFF') return '🇰🇷';  // South Korea
+            if (h >= '6D8000' && h <= '6D8FFF') return '🇰🇵';  // North Korea
+            if (h >= '6E0000' && h <= '6E0FFF') return '🇮🇶';  // Iraq
+            if (h >= '6E8000' && h <= '6E8FFF') return '🇮🇷';  // Iran
+            if (h >= '6F0000' && h <= '6F0FFF') return '🇮🇱';  // Israel
+            if (h >= '6F8000' && h <= '6F8FFF') return '🇯🇴';  // Jordan
+            if (h >= '700000' && h <= '700FFF') return '🇱🇧';  // Lebanon
+            if (h >= '708000' && h <= '708FFF') return '🇲🇾';  // Malaysia
+            if (h >= '710000' && h <= '717FFF') return '🇵🇭';  // Philippines
+            if (h >= '718000' && h <= '71FFFF') return '🇵🇰';  // Pakistan
+            if (h >= '720000' && h <= '727FFF') return '🇸🇬';  // Singapore
+            if (h >= '728000' && h <= '72FFFF') return '🇱🇰';  // Sri Lanka
+            if (h >= '730000' && h <= '737FFF') return '🇸🇾';  // Syria
+            if (h >= '738000' && h <= '73FFFF') return '🇹🇼';  // Taiwan
+            if (h >= '740000' && h <= '747FFF') return '🇹🇭';  // Thailand
+            if (h >= '748000' && h <= '74FFFF') return '🇻🇳';  // Vietnam
+            if (h >= '750000' && h <= '757FFF') return '🇾🇪';  // Yemen
+            if (h >= '758000' && h <= '75FFFF') return '🇧🇭';  // Bahrain
+            if (h >= '760000' && h <= '767FFF') return '🇦🇪';  // UAE
+            if (h >= '768000' && h <= '76FFFF') return '🇧🇳';  // Brunei
+            if (h >= '780000' && h <= '7BFFFF') return '🇨🇳';  // China
+            if (h >= '7C0000' && h <= '7FFFFF') return '🇦🇺';  // Australia
+            if (h >= '800000' && h <= '83FFFF') return '🇮🇳';  // India
+            if (h >= '840000' && h <= '87FFFF') return '🇯🇵';  // Japan
+            if (h >= '880000' && h <= '887FFF') return '🇹🇭';  // Thailand (extended)
+            if (h >= '888000' && h <= '88FFFF') return '🇻🇳';  // Vietnam (extended)
+            if (h >= '890000' && h <= '890FFF') return '🇭🇰';  // Hong Kong
+            if (h >= '894000' && h <= '894FFF') return '🇰🇵';  // North Korea
+            if (h >= '895000' && h <= '8953FF') return '🇲🇴';  // Macao
+            if (h >= '896000' && h <= '896FFF') return '🇰🇷';  // South Korea
+            if (h >= '897000' && h <= '8973FF') return '🇰🇭';  // Cambodia
+            if (h >= '898000' && h <= '898FFF') return '🇵🇭';  // Philippines
+            if (h >= '899000' && h <= '8993FF') return '🇲🇳';  // Mongolia
+            if (h >= '89A000' && h <= '89AFFF') return '🇹🇼';  // Taiwan
+            
+            // ═══════════════════════════════════════════════════════════
+            // NORTH AMERICA (0xA00000 - 0xCFFFFF)
+            // ═══════════════════════════════════════════════════════════
+            if (h >= 'A00000' && h <= 'AFFFFF') return '🇺🇸';  // USA
+            if (h >= 'C00000' && h <= 'C3FFFF') return '🇨🇦';  // Canada
+            if (h >= 'C80000' && h <= 'C87FFF') return '🇳🇿';  // New Zealand
+            if (h >= 'C88000' && h <= 'C88FFF') return '🇫🇯';  // Fiji
+            if (h >= 'C8A000' && h <= 'C8AFFF') return '🇳🇷';  // Nauru
+            if (h >= 'C8C000' && h <= 'C8CFFF') return '🇱🇨';  // Saint Lucia
+            if (h >= 'C8E000' && h <= 'C8EFFF') return '🇻🇺';  // Vanuatu
+            if (h >= 'C90000' && h <= 'C903FF') return '🇸🇧';  // Solomon Islands
+            if (h >= 'C92000' && h <= 'C923FF') return '🇵🇬';  // Papua New Guinea
+            
+            // ═══════════════════════════════════════════════════════════
+            // SOUTH AMERICA (0xE00000 - 0xEFFFFF)
+            // ═══════════════════════════════════════════════════════════
+            if (h >= 'E00000' && h <= 'E3FFFF') return '🇦🇷';  // Argentina
+            if (h >= 'E40000' && h <= 'E7FFFF') return '🇧🇷';  // Brazil
+            if (h >= 'E80000' && h <= 'E80FFF') return '🇨🇱';  // Chile
+            if (h >= 'E84000' && h <= 'E84FFF') return '🇪🇨';  // Ecuador
+            if (h >= 'E88000' && h <= 'E88FFF') return '🇵🇾';  // Paraguay
+            if (h >= 'E8C000' && h <= 'E8CFFF') return '🇵🇪';  // Peru
+            if (h >= 'E90000' && h <= 'E90FFF') return '🇺🇾';  // Uruguay
+            if (h >= 'E94000' && h <= 'E94FFF') return '🇧🇴';  // Bolivia
+            
+            // ═══════════════════════════════════════════════════════════
+            // ICAO / INTERNATIONAL (0xF00000+)
+            // ═══════════════════════════════════════════════════════════
+            if (h >= 'F00000' && h <= 'F07FFF') return '🌐';  // ICAO
+            
+            return '🌍';  // Unknown/other
+        }
+
+        // Get freshness class based on age
+        function getAgeClass(seen) {
+            if (seen === undefined) return '';
+            if (seen <= 10) return 'age-fresh';
+            if (seen <= 30) return 'age-stale';
+            if (seen <= 60) return 'age-old';
+            if (seen <= 120) return 'age-lost';
+            return 'age-gone';
+        }
+
+        // Callsign cache - remember callsigns even when not in current poll
+        const callsignCache = {};
+        
+        // Units toggle
+        let useMetricUnits = localStorage.getItem('useMetricUnits') === 'true';
+        
+        function toggleUnits() {
+            useMetricUnits = !useMetricUnits;
+            localStorage.setItem('useMetricUnits', useMetricUnits);
+            document.getElementById('units-toggle-switch').classList.toggle('active', useMetricUnits);
+            updateLiveAircraft(); // Refresh with new units
+        }
+
+        // Initialize units toggle state
+        if (useMetricUnits) {
+            document.getElementById('units-toggle-switch').classList.add('active');
+        }
+
+        // Update live aircraft list (table format)
+        async function updateLiveAircraft() {
             try {
                 const response = await fetch(`${tar1090URL}data/aircraft.json`);
                 const data = await response.json();
                 
-                const aircraftList = document.getElementById('recent-aircraft');
+                const aircraftList = document.getElementById('live-aircraft');
                 const updateTime = document.getElementById('aircraft-update-time');
+                const countBadge = document.getElementById('aircraft-count-badge');
                 
                 if (!data.aircraft || data.aircraft.length === 0) {
                     aircraftList.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">No aircraft detected</div>';
+                    countBadge.textContent = '0';
                     return;
                 }
                 
-                // Sort by last seen (most recent first) and take top 10
-                const recentAircraft = data.aircraft
-                    .filter(ac => ac.flight || ac.hex)
-                    .sort((a, b) => (a.seen || 999) - (b.seen || 999))
-                    .slice(0, 10);
+                // Filter aircraft with position and sort by distance
+                const liveAircraft = data.aircraft
+                    .filter(ac => (ac.flight || ac.hex) && ac.lat && ac.lon)
+                    .sort((a, b) => (a.r_dst || 999) - (b.r_dst || 999))
+                    .slice(0, 15);
                 
-                if (recentAircraft.length === 0) {
+                countBadge.textContent = data.aircraft.filter(ac => ac.lat && ac.lon).length;
+                
+                if (liveAircraft.length === 0) {
                     aircraftList.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">No aircraft with position data</div>';
                     return;
                 }
                 
-                let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+                // Units labels
+                const spdLabel = useMetricUnits ? 'Spd' : 'Spd';
+                const distLabel = useMetricUnits ? 'Dist' : 'Dist';
                 
-                recentAircraft.forEach(aircraft => {
-                    const flight = (aircraft.flight || aircraft.hex || 'Unknown').trim();
-                    const alt = aircraft.alt_baro ? `${aircraft.alt_baro}ft` : '-';
-                    const dist = aircraft.r_dst ? `${aircraft.r_dst.toFixed(1)}nm` : '-';
-                    const seen = aircraft.seen < 60 ? `${Math.floor(aircraft.seen)}s` : `${Math.floor(aircraft.seen / 60)}m`;
+                // Build table
+                let html = `
+                    <table class="aircraft-table">
+                        <thead>
+                            <tr>
+                                <th>Callsign</th>
+                                <th>Hex</th>
+                                <th>Type</th>
+                                <th>Alt</th>
+                                <th>${spdLabel}</th>
+                                <th>Hdg</th>
+                                <th>${distLabel}</th>
+                                <th>Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                liveAircraft.forEach(aircraft => {
+                    const hex = aircraft.hex || '';
+                    const flag = getCountryFlag(hex);
+                    
+                    // Use cached callsign if current poll doesn't have it
+                    let flight = (aircraft.flight || '').trim();
+                    if (flight && hex) {
+                        callsignCache[hex.toLowerCase()] = flight;  // Cache it
+                    } else if (!flight && hex && callsignCache[hex.toLowerCase()]) {
+                        flight = callsignCache[hex.toLowerCase()];  // Use cached
+                    }
+                    if (!flight) flight = '—';
+                    
+                    // Aircraft type - try to get from tar1090 db cache, fall back to category
+                    // Note: aircraft.type is SIGNAL type (adsb_icao), not aircraft type!
+                    let type = '—';
+                    if (aircraft.t) {
+                        type = aircraft.t;  // If tar1090 enriched it
+                    } else if (aircraft.desc) {
+                        type = aircraft.desc;
+                    } else if (aircraft.category) {
+                        // Show category with meaning
+                        const catMap = {
+                            'A0': 'A0', 'A1': 'Light', 'A2': 'Small', 
+                            'A3': 'Large', 'A4': 'B757', 'A5': 'Heavy',
+                            'A6': 'Perf', 'A7': 'Rotor',
+                            'B0': 'B0', 'B1': 'Glider', 'B2': 'Balloon',
+                            'B3': 'Chute', 'B4': 'Ultra', 'B6': 'UAV', 'B7': 'Space',
+                            'C0': 'C0', 'C1': 'Emerg', 'C2': 'Service', 'C3': 'Ground'
+                        };
+                        type = catMap[aircraft.category] || aircraft.category;
+                    }
+                    
+                    // Altitude with climb/descend indicator
+                    let alt = '—';
+                    let altClass = '';
+                    if (aircraft.alt_baro) {
+                        const altVal = aircraft.alt_baro >= 10000 ? 
+                            Math.round(aircraft.alt_baro / 1000) + 'k' : 
+                            aircraft.alt_baro;
+                        const vertRate = aircraft.baro_rate || aircraft.geom_rate || 0;
+                        if (vertRate > 200) {
+                            alt = `${altVal}▲`;
+                            altClass = 'climbing';
+                        } else if (vertRate < -200) {
+                            alt = `${altVal}▼`;
+                            altClass = 'descending';
+                        } else {
+                            alt = altVal;
+                        }
+                    }
+                    
+                    // Speed with acceleration/deceleration indicator
+                    let spd = '—';
+                    let spdClass = '';
+                    if (aircraft.gs) {
+                        const prevSpeed = prevAircraftSpeeds[hex];
+                        const speedDiff = prevSpeed !== undefined ? aircraft.gs - prevSpeed : 0;
+                        
+                        let spdVal;
+                        if (useMetricUnits) {
+                            spdVal = `${Math.round(aircraft.gs * 1.15078)}mph`;
+                        } else {
+                            spdVal = `${Math.round(aircraft.gs)}kt`;
+                        }
+                        
+                        // Show trend if speed changed by more than 5 knots
+                        if (speedDiff > 5) {
+                            spd = `${spdVal}▲`;
+                            spdClass = 'accelerating';
+                        } else if (speedDiff < -5) {
+                            spd = `${spdVal}▼`;
+                            spdClass = 'decelerating';
+                        } else {
+                            spd = spdVal;
+                        }
+                        
+                        // Store current speed for next comparison
+                        prevAircraftSpeeds[hex] = aircraft.gs;
+                    }
+                    
+                    // Heading with arrow
+                    let hdg = '—';
+                    if (aircraft.track !== undefined) {
+                        const arrows = ['↑','↗','→','↘','↓','↙','←','↖'];
+                        const idx = Math.round(aircraft.track / 45) % 8;
+                        hdg = `${Math.round(aircraft.track)}°${arrows[idx]}`;
+                    }
+                    
+                    // Distance (nm to mi: multiply by 1.15078)
+                    let dist = '—';
+                    if (aircraft.r_dst) {
+                        if (useMetricUnits) {
+                            dist = `${(aircraft.r_dst * 1.15078).toFixed(1)}mi`;
+                        } else {
+                            dist = `${aircraft.r_dst.toFixed(1)}nm`;
+                        }
+                    }
+                    
+                    // Age with freshness color
+                    const seenVal = aircraft.seen;
+                    const ageClass = getAgeClass(seenVal);
+                    const seen = seenVal !== undefined ? 
+                        (seenVal < 60 ? `${Math.floor(seenVal)}s` : `${Math.floor(seenVal / 60)}m`) : 
+                        '—';
+                    
+                    // ADSBexchange lookup URL
+                    const adsbxUrl = hex ? `https://globe.adsbexchange.com/?icao=${hex}` : '#';
                     
                     html += `
-                        <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.05); border-radius: 4px; font-size: 0.9em;">
-                            <span style="color: var(--text-primary); font-weight: 500;">${flight}</span>
-                            <span style="color: var(--text-secondary);">${alt} • ${dist} • ${seen}</span>
-                        </div>
+                        <tr>
+                            <td class="callsign">${flag} ${flight}</td>
+                            <td><a href="${adsbxUrl}" target="_blank" class="hex-link" title="View on ADSBexchange">${hex || '—'}</a></td>
+                            <td class="type">${type}</td>
+                            <td class="${altClass}">${alt}</td>
+                            <td class="${spdClass}">${spd}</td>
+                            <td>${hdg}</td>
+                            <td>${dist}</td>
+                            <td class="${ageClass}">${seen}</td>
+                        </tr>
                     `;
                 });
                 
-                html += '</div>';
+                html += '</tbody></table>';
                 aircraftList.innerHTML = html;
+                
+                // Clean up old aircraft from speed tracking
+                const currentHexes = new Set(liveAircraft.map(ac => ac.hex));
+                Object.keys(prevAircraftSpeeds).forEach(hex => {
+                    if (!currentHexes.has(hex)) {
+                        delete prevAircraftSpeeds[hex];
+                    }
+                });
                 
                 const now = new Date();
                 updateTime.textContent = `Updated ${now.toLocaleTimeString()}`;
@@ -1544,13 +2330,43 @@
             }
         }
 
+        // Check for updates
+        async function checkForUpdates() {
+            const CURRENT_VERSION = '1.2.1';
+            const dismissedVersion = localStorage.getItem('dismissed-update-version');
+            
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/datboip/EasyADSB/main/VERSION');
+                const remoteVersion = (await response.text()).trim();
+                
+                if (remoteVersion !== CURRENT_VERSION && remoteVersion !== dismissedVersion) {
+                    document.getElementById('update-version').textContent = 'v' + remoteVersion;
+                    document.getElementById('update-toast').classList.add('show');
+                    localStorage.setItem('available-update-version', remoteVersion);
+                }
+            } catch (error) {
+                console.log('Update check failed (offline or rate limited)');
+            }
+        }
+
+        function dismissUpdate() {
+            const availableVersion = localStorage.getItem('available-update-version');
+            if (availableVersion) {
+                localStorage.setItem('dismissed-update-version', availableVersion);
+            }
+            document.getElementById('update-toast').classList.remove('show');
+        }
+
         // Initialize
         window.lastStatsUpdate = Date.now();
         updateReferenceIDs();
         updateStats();
-        updateRecentAircraft(); // Initial load
+        updateLiveAircraft(); // Initial load
         setInterval(updateStats, 5000);
-        setInterval(updateRecentAircraft, 5000); // Update aircraft every 5 seconds
+        setInterval(updateLiveAircraft, 5000); // Update aircraft every 5 seconds
+        
+        // Check for updates on load (delayed to not slow down initial render)
+        setTimeout(checkForUpdates, 3000);
         
         // Show PiAware claim message if not dismissed
         if (localStorage.getItem('piaware-claim-dismissed') !== 'true') {
@@ -1567,7 +2383,6 @@
         // FLIGHT LOGGER FUNCTIONS
         // ══════════════════════════════════════════════════════════════════════════════
         
-        const LOGGER_PORT = window.FEEDER_CONFIG?.loggerPort || 8082;
         const LOGGER_URL = `http://${window.location.hostname}:${LOGGER_PORT}`;
         let loggerAvailable = false;
         let loggerPaused = false;

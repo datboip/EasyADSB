@@ -27,8 +27,11 @@ EasyADSB is an **all-in-one automated setup script** that turns your Raspberry P
 
 - ✅ **One-Command Setup** - Run `./setup.sh` and follow the prompts
 - ✅ **Auto-Configuration** - Automatically generates keys and IDs for all services
-- ✅ **Flight Logger** - Save all flights to local database, export CSV/JSON (NEW!)
-- ✅ **Configurable Ports** - Avoid conflicts with other services (NEW!)
+- ✅ **Flight Logger** - Save all flights to local database, export CSV/JSON
+- ✅ **Live Aircraft Table** - See callsigns, hex IDs, types, altitude, speed (NEW in v1.2.1!)
+- ✅ **ADSBx Integration** - Quick links to My Stats, Coverage, Leaderboard (NEW in v1.2.1!)
+- ✅ **Units Toggle** - Switch between kt/nm and mph/mi (NEW in v1.2.1!)
+- ✅ **Configurable Ports** - Avoid conflicts with other services
 - ✅ **Auto-Update** - Pull latest updates from GitHub
 - ✅ **Web Dashboard** - Modern interface with live aircraft tracking
 - ✅ **Dark Mode** - Easy on the eyes, looks great
