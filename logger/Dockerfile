@@ -1,12 +1,12 @@
 # EasyADSB Flight Logger
-# Version: 1.2.0
+# Version: 1.3.0
 # Lightweight Python container for flight logging and API
 
 FROM python:3.11-slim
 
 LABEL maintainer="EasyADSB"
 LABEL description="Flight logger with REST API for EasyADSB"
-LABEL version="1.2.0"
+LABEL version="1.3.0"
 
 WORKDIR /app
 

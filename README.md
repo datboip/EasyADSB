@@ -19,27 +19,49 @@ EasyADSB is an **all-in-one automated setup script** that turns your Raspberry P
 - 📶 **RadarBox** - Aviation data platform
 - 🗺️ **Local tar1090** - Your own web-based map
 
-**Plus:** A beautiful web dashboard to monitor everything in one place!
+**Plus:** A beautiful web dashboard with live maps, achievements, leaderboards, and flight logging!
 
 ---
 
 ## ✨ Key Features
 
+### Core
 - ✅ **One-Command Setup** - Run `./setup.sh` and follow the prompts
 - ✅ **Auto-Configuration** - Automatically generates keys and IDs for all services
-- ✅ **Flight Logger** - Save all flights to local database, export CSV/JSON
-- ✅ **Live Aircraft Table** - See callsigns, hex IDs, types, altitude, speed (NEW in v1.2.1!)
-- ✅ **ADSBx Integration** - Quick links to My Stats, Coverage, Leaderboard (NEW in v1.2.1!)
-- ✅ **Units Toggle** - Switch between kt/nm and mph/mi (NEW in v1.2.1!)
-- ✅ **Configurable Ports** - Avoid conflicts with other services
-- ✅ **Auto-Update** - Pull latest updates from GitHub
-- ✅ **Web Dashboard** - Modern interface with live aircraft tracking
-- ✅ **Dark Mode** - Easy on the eyes, looks great
-- ✅ **Real-Time Stats** - Aircraft count, message rate, max range
-- ✅ **Mobile Responsive** - Works on phone, tablet, desktop
-- ✅ **Easy Uninstall** - Remove everything cleanly
 - ✅ **Zero Manual Config** - No editing config files (unless you want to)
+- ✅ **Easy Updates** - Pull latest from GitHub with one menu option
+- ✅ **Clean Uninstall** - Remove everything when needed
 
+### Dashboard (v1.3.0)
+- **Custom Interactive Map** - Native Leaflet map with SVG aircraft icons
+  - Altitude-based coloring (green → yellow → orange → red → purple)
+  - Real-time heading rotation
+  - 6 map styles (Dark, Light, Satellite, Terrain, etc.)
+  - Distance rings (50/100/150/200/250nm)
+  - Antenna range overlay showing actual coverage
+  - Toggle labels, trails, rings, follow mode
+- **Live Aircraft Table** - Callsigns, types, altitude, speed, distance
+- **Quick Stats** - Aircraft count, messages/sec, max range
+- **Feed Status** - Live indicators for all 6 services with collapsible cards
+- **Dark Mode** - Remembers your preference
+
+### Flight Logger
+- **SQLite Database** - Save all aircraft positions locally
+- **Configurable** - Sample rate (5-60s), retention (7/14/30 days or forever)
+- **Export** - Download as CSV or JSON anytime
+- **REST API** - Query flights, traces, statistics programmatically
+
+### Achievements & Stats (v1.3.0)
+- **74+ Achievements** - 8 categories (altitude, speed, types, streaks, etc.)
+- **Leaderboard** - Top aircraft by sightings with time-range filters (24h/7d/30d/all)
+- **Personal Records** - Busiest day, max altitude, top speed, best signal
+- **Aircraft Type Gallery** - Categorized display of logged aircraft types
+- **Activity Heatmap** - Traffic patterns by day/hour with daily totals
+
+### Hardware-Aware (v1.3.0)
+- **Auto-Detection** - Identifies Pi 3/4/5, Zero, Zero 2 W
+- **Smart Recommendations** - Tailored poll intervals based on your hardware
+- **System Monitoring** - CPU temp, memory, disk usage, uptime
 ---
 
 ## 📋 Requirements
