@@ -4,7 +4,7 @@
 
 One command. 15-20 minutes. Six flight tracking networks. Zero headaches.
 
-![EasyADSB Dashboard](screenshots/dashboard-full.png)
+![EasyADSB Dashboard](screenshots/dashboard-hero.png)
 
 ---
 
@@ -172,20 +172,28 @@ hostname -I
 
 ## 🎛️ Dashboard Features
 
-### Live Aircraft Tracking
-- **Recent Aircraft List** - Last 10 detected aircraft with flight number, altitude, distance
-- **Auto-Refresh** - Updates every 5 seconds
-- **Interactive Map** - Embedded tar1090 map showing all aircraft
+### Interactive Map (v1.3.0)
+- **Custom Leaflet Map** - Native SVG aircraft icons with altitude coloring
+- **6 Map Styles** - Dark, Light, Voyager, Satellite, Terrain, OpenStreetMap
+- **Real-time Updates** - Aircraft positions, headings, and trails
+- **Distance Rings** - 50/100/150/200/250nm range indicators
+- **Antenna Coverage** - Overlay showing your actual reception range
+
+![Map Styles](screenshots/dashboard-map-styles.png)
 
 ### Quick Stats
 - **Aircraft Count** - Total aircraft currently visible
 - **Messages/Second** - Data throughput from your receiver
 - **Max Range** - Furthest aircraft detected
 
-### Feed Status
+### Feed Status (v1.3.0)
 - **Broadcasting Status** - Live indicators for all 6 services
+- **Collapsible Cards** - Click to expand/collapse each section
 - **Direct Links** - One-click access to your stats on each platform
 - **Station IDs** - All your UUIDs and keys with copy buttons
+
+![Feed Status Collapsed](screenshots/dashboard-feed-collapsed.png)
+*Sections collapse for a cleaner view*
 
 ![Station IDs](screenshots/station-ids.png)
 
@@ -194,8 +202,17 @@ hostname -I
 - **Persistent** - Remembers your preference
 - **Optimized Colors** - Perfect contrast in both modes
 
+![Dashboard Dark Mode](screenshots/dashboard-dark.png)
+*Dark mode (default) - easy on the eyes*
+
 ![Dashboard Light Mode](screenshots/dashboard-light.png)
-*Light mode is also available for daytime viewing*
+*Light mode - perfect for daytime viewing*
+
+### Collapsible Sections (v1.3.0)
+Every section can be collapsed for a cleaner, more compact view. Your preferences are saved automatically.
+
+![All Sections Collapsed](screenshots/dashboard-all-collapsed.png)
+*All sections collapsed - perfect for quick status checks*
 
 ---
 
@@ -263,6 +280,32 @@ GET  /api/trace/<icao> - Get flight path
 POST /api/pause       - Pause logging
 POST /api/resume      - Resume logging
 ```
+
+---
+
+## 🏆 Achievements & Stats (v1.3.0)
+
+Track your spotting progress with gamified achievements and detailed statistics!
+
+### Leaderboard
+Top aircraft by sightings with time-range filters (24h, 7d, 30d, all-time).
+
+![Leaderboard](screenshots/dashboard-leaderboard.png)
+
+### Spotter Stats
+Personal records including busiest day, max altitude, top speed, and signal strength.
+
+![Spotter Stats](screenshots/dashboard-spotter-stats.png)
+
+### Achievements
+74+ achievements across 8 categories - altitude milestones, speed records, aircraft types, spotting streaks, and more!
+
+![Achievements](screenshots/dashboard-achievements.png)
+
+### Aircraft Type Gallery
+Categorized display of all logged aircraft types with images and counts.
+
+![Type Gallery](screenshots/dashboard-type-gallery.png)
 
 ---
 
