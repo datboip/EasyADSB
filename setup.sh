@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # EasyADSB - Automated ADS-B Multi-Feeder Setup
-# Version: 1.2.1
+# Version: 1.3.0
 # Last Updated: 2025-11-30
 # 
 # One-command setup for 6 ADS-B flight tracking networks
@@ -24,6 +24,7 @@ set -e
 
 # Colors
 GREEN='\033[0;32m'
+RED='\033[0;31m'
 CYAN='\033[1;37m'  # Changed to white for readability
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
@@ -103,7 +104,7 @@ find_available_port() {
 clear
 echo ""
 echo "════════════════════════════════════════════════════════════════════════════════"
-echo "              EasyADSB Setup v1.2.1 (15-20 mins)"
+echo "              EasyADSB Setup v1.3.0 (15-20 mins)"
 echo "════════════════════════════════════════════════════════════════════════════════"
 echo ""
 
@@ -339,12 +340,12 @@ JSEOF
                     INTERVAL=$(echo "$LOGGER_STATS" | grep -o '"interval":[0-9]*' | cut -d':' -f2)
                     
                     if [ "$PAUSED" = "true" ]; then
-                        STATUS_TEXT="⏸️  Paused"
+                        STATUS_TEXT="${YELLOW}⏸️  Paused${NC}"
                     else
-                        STATUS_TEXT="● Recording"
+                        STATUS_TEXT="${RED}● Recording${NC}"
                     fi
                     
-                    echo "  Status:     $STATUS_TEXT"
+                    echo -e "  Status:     $STATUS_TEXT"
                     echo "  Interval:   ${INTERVAL}s"
                     echo "  Positions:  $POSITIONS"
                     echo "  Aircraft:   $AIRCRAFT"
@@ -689,7 +690,7 @@ JSEOF
                     tar -tzf "$restore_file" | head -20
                     echo ""
                     echo -e "${YELLOW}⚠${NC} This will overwrite existing files!"
-                    read -p "Restore this backup? (y/n): " -n 1 -r
+                    read -p "Restore this backup? (y/n): " -r
                     echo ""
                     
                     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -763,7 +764,7 @@ JSEOF
             echo "Updates available:"
             git log --oneline HEAD..origin/main | head -5
             echo ""
-            read -p "Pull updates and restart? (y/n): " -n 1 -r
+            read -p "Pull updates and restart? (y/n): " -r
             echo ""
             
             if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -847,7 +848,7 @@ JSEOF
             echo "  • logger/app.py"
             echo "  • docker-compose.yml"
             echo ""
-            read -p "Rebuild and restart all services? (y/n): " -n 1 -r
+            read -p "Rebuild and restart all services? (y/n): " -r
             echo ""
             
             if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -871,7 +872,7 @@ JSEOF
 // Generated: $(date)
 window.FEEDER_CONFIG = {
     adsbxUUID: "${ADSBX_UUID}",
-    adsblolUUID: "${MULTIFEEDER_UUID}",
+    adsbLolUUID: "${MULTIFEEDER_UUID}",
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
@@ -1011,7 +1012,7 @@ if command -v docker &> /dev/null; then
     echo -e "${GREEN}✓${NC}"
 else
     echo -e "${YELLOW}✗${NC}"
-    read -p "Docker not found. Install now? (y/n): " -n 1 -r
+    read -p "Docker not found. Install now? (y/n): " -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "Installing Docker..."
@@ -1033,7 +1034,7 @@ if lsusb 2>/dev/null | grep -iq "realtek"; then
     echo -e "${GREEN}✓${NC}"
 else
     echo -e "${YELLOW}✗${NC}"
-    read -p "RTL-SDR not detected. Continue anyway? (y/n): " -n 1 -r
+    read -p "RTL-SDR not detected. Continue anyway? (y/n): " -r
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         exit 1
@@ -1052,7 +1053,7 @@ else
     echo ""
     echo "  To fix: Download dashboard.html and place it in: $SCRIPT_DIR"
     echo ""
-    read -p "Continue without dashboard? (y/n): " -n 1 -r
+    read -p "Continue without dashboard? (y/n): " -r
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         exit 0
@@ -1065,6 +1066,29 @@ echo "════════════════════════�
 echo "  ✓ All Prerequisites Met!"
 echo "════════════════════════════════════════════════════════════════════════════════"
 echo ""
+
+# Check for existing data
+if [ -d "/opt/adsb" ] && [ -n "$(ls -A /opt/adsb 2>/dev/null)" ]; then
+    echo ""
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    echo "  Existing Data Found"
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    echo ""
+    echo "  Found existing ADS-B data in /opt/adsb:"
+    [ -f "/opt/adsb/flightlogs/flights.db" ] && echo "    • Flight logs database"
+    [ -d "/opt/adsb/ultrafeeder/globe_history" ] && echo "    • Globe history"
+    [ -d "/opt/adsb/ultrafeeder/graphs1090" ] && echo "    • Statistics graphs"
+    echo ""
+    read -p "Keep existing data or start fresh? (k/f): " -r
+    echo ""
+    if [[ $REPLY =~ ^[Ff]$ ]]; then
+        echo "Removing existing data..."
+        sudo rm -rf /opt/adsb
+        echo -e "${GREEN}✓ Starting fresh${NC}"
+    else
+        echo -e "${GREEN}✓ Keeping existing data${NC}"
+    fi
+fi
 echo "  Ready to configure your ADS-B multi-feeder setup."
 echo "  This will take 15-20 minutes and will:"
 echo ""
@@ -1073,7 +1097,7 @@ echo "    • Set up 5 Docker containers"
 echo "    • Auto-generate feed credentials"
 echo "    • Start all services"
 echo ""
-read -p "Continue with setup? (y/n): " -n 1 -r
+read -p "Continue with setup? (y/n): " -r
 echo ""
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     # User chose not to continue - show management menu instead
@@ -1185,7 +1209,7 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             echo "Updates available!"
             git log --oneline HEAD..origin/main | head -5
             echo ""
-            read -p "Pull updates and restart? (y/n): " -n 1 -r
+            read -p "Pull updates and restart? (y/n): " -r
             echo ""
             
             if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -1267,7 +1291,7 @@ JSEOF
             echo "✓ Containers removed"
             
             echo ""
-            read -p "Remove data volumes? (/opt/adsb) (y/n): " -n 1 -r
+            read -p "Remove data volumes? (/opt/adsb) (y/n): " -r
             echo ""
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 sudo rm -rf /opt/adsb
@@ -1275,7 +1299,7 @@ JSEOF
             fi
             
             echo ""
-            read -p "Remove configuration files? (.env, dashboard-config.js) (y/n): " -n 1 -r
+            read -p "Remove configuration files? (.env, dashboard-config.js) (y/n): " -r
             echo ""
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 rm -f .env .env.backup.* dashboard-config.js
@@ -1314,7 +1338,7 @@ if [ -n "$OLD_LAT" ] && [ -n "$OLD_LONG" ]; then
     echo "  Timezone:  $OLD_TZ"
     echo "  Name:      $OLD_NAME"
     echo ""
-    read -p "Keep this configuration? (y/n): " -n 1 -r
+    read -p "Keep this configuration? (y/n): " -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         FEEDER_LAT=$OLD_LAT
@@ -1407,9 +1431,9 @@ echo "  Flight Logger"
 echo "════════════════════════════════════════════════════════════════════════════════"
 echo ""
 echo "The flight logger saves all aircraft you track to a local database."
-echo "You can export your data, see statistics, and (coming soon) replay flights."
+echo "You can export your data, see statistics."
 echo ""
-read -p "Enable flight logging? (Y/n): " -n 1 -r
+read -p "Enable flight logging? (Y/n): " -r
 echo ""
 if [[ $REPLY =~ ^[Nn]$ ]]; then
     LOG_ENABLED=false
@@ -1461,7 +1485,7 @@ echo -e "${GREEN}✓ Logger configured${NC}"
 
 # Ask about existing keys
 echo ""
-read -p "Have you set up ADS-B feeding before? (y/n): " -n 1 -r
+read -p "Have you set up ADS-B feeding before? (y/n): " -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     HAS_EXISTING_SETUP=true
@@ -1487,7 +1511,7 @@ echo ""
 if [ -n "$OLD_RB" ] && [ "$OLD_RB" != "YOUR-RADARBOX-KEY" ]; then
     echo "Found existing RadarBox key: $OLD_RB"
     [ -n "$OLD_RB_SERIAL" ] && echo "Found existing RadarBox serial: $OLD_RB_SERIAL"
-    read -p "Keep these? (y/n): " -n 1 -r
+    read -p "Keep these? (y/n): " -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         RADARBOX_KEY=$OLD_RB
@@ -1498,14 +1522,16 @@ if [ -n "$OLD_RB" ] && [ "$OLD_RB" != "YOUR-RADARBOX-KEY" ]; then
         HAS_RB_KEY=false
     fi
 elif [[ $HAS_EXISTING_SETUP == true ]]; then
-    read -p "Have existing RadarBox key? (y/n): " -n 1 -r
+    read -p "Have existing RadarBox key? (y/n): " -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         read -p "Enter your RadarBox sharing key: " RADARBOX_KEY
         HAS_RB_KEY=true
         # Also ask for serial if they have it
         echo ""
-        read -p "Do you also have your RadarBox serial? (y/n): " -n 1 -r
+        echo "Do you have your RadarBox serial?"
+        echo "(n or Enter to skip - auto-detects after start)"
+        read -p "(y/n): " -r
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             read -p "Enter your RadarBox serial (e.g., EXTRPI123456): " RADARBOX_SERIAL
@@ -1641,7 +1667,9 @@ if [[ ${HAS_RB_KEY:-false} == false ]]; then
             else
                 # Ask for serial too if they have it
                 echo ""
-                read -p "Do you also have your RadarBox serial? (y/n): " -n 1 -r
+                echo "Do you have your RadarBox serial?"
+                echo "(n or Enter to skip - auto-detects after start)"
+                read -p "(y/n): " -r
                 echo ""
                 if [[ $REPLY =~ ^[Yy]$ ]]; then
                     read -p "Enter your RadarBox serial (e.g., EXTRPI123456): " RADARBOX_SERIAL
@@ -1679,7 +1707,7 @@ echo ""
 # Check if we have an old key
 if [ -n "$OLD_FR24" ] && [ "$OLD_FR24" != "YOUR-FR24-KEY" ]; then
     echo "Found existing FR24 key: $OLD_FR24"
-    read -p "Keep this key? (y/n): " -n 1 -r
+    read -p "Keep this key? (y/n): " -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         FR24KEY=$OLD_FR24
@@ -1689,7 +1717,7 @@ if [ -n "$OLD_FR24" ] && [ "$OLD_FR24" != "YOUR-FR24-KEY" ]; then
         HAS_FR24_KEY=false
     fi
 elif [[ $HAS_EXISTING_SETUP == true ]]; then
-    read -p "Have existing FR24 key? (y/n): " -n 1 -r
+    read -p "Have existing FR24 key? (y/n): " -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         read -p "Enter your FR24 sharing key: " FR24KEY
@@ -1787,7 +1815,7 @@ if [[ ${HAS_FR24_KEY:-false} == false ]]; then
             
             if [ -n "$FR24KEY" ] && [ ${#FR24KEY} -eq 16 ]; then
                 echo -e "${GREEN}✓ FR24 key auto-extracted: $FR24KEY${NC}"
-                read -p "Is this correct? (y/n): " -n 1 -r
+                read -p "Is this correct? (y/n): " -r
                 echo ""
                 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                     read -p "Enter the correct FR24 sharing key: " FR24KEY
@@ -1845,7 +1873,7 @@ echo ""
 # Check if we have an old ID
 if [ -n "$OLD_PA" ] && [ "$OLD_PA" != "YOUR-PIAWARE-FEEDER-ID" ]; then
     echo "Found existing PiAware ID: $OLD_PA"
-    read -p "Keep this ID? (y/n): " -n 1 -r
+    read -p "Keep this ID? (y/n): " -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         PIAWARE_FEEDER_ID=$OLD_PA
@@ -1857,7 +1885,7 @@ if [ -n "$OLD_PA" ] && [ "$OLD_PA" != "YOUR-PIAWARE-FEEDER-ID" ]; then
         HAS_PA_ID=false
     fi
 elif [[ $HAS_EXISTING_SETUP == true ]]; then
-    read -p "Have existing PiAware Feeder ID? (y/n): " -n 1 -r
+    read -p "Have existing PiAware Feeder ID? (y/n): " -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         read -p "Enter your PiAware Feeder ID: " PIAWARE_FEEDER_ID
@@ -1894,7 +1922,7 @@ if [[ ${HAS_PA_ID:-false} == false ]]; then
                 echo -e "${YELLOW}⚠ Warning: RTL-SDR not detected via lsusb${NC}"
                 echo "This may cause the container to fail."
                 echo ""
-                read -p "Continue anyway? (y/n): " -n 1 -r
+                read -p "Continue anyway? (y/n): " -r
                 echo ""
                 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                     SKIP_PIAWARE=true
@@ -1915,7 +1943,7 @@ if [[ ${HAS_PA_ID:-false} == false ]]; then
                     EXISTING_ID=$(docker logs piaware-temp 2>&1 | grep -i "my feeder ID is" | tail -1 | grep -oP 'my feeder ID is \K[a-f0-9-]+' | tr -d '\r\n' || echo "")
                     if [ -n "$EXISTING_ID" ] && [ ${#EXISTING_ID} -gt 10 ]; then
                         echo -e "${CYAN}Found existing PiAware container with ID: $EXISTING_ID${NC}"
-                        read -p "Use this ID? (y/n): " -n 1 -r
+                        read -p "Use this ID? (y/n): " -r
                         echo ""
                         if [[ $REPLY =~ ^[Yy]$ ]]; then
                             PIAWARE_FEEDER_ID="$EXISTING_ID"
@@ -2079,6 +2107,10 @@ FEEDER_NAME=$FEEDER_NAME
 ADSB_SDR_SERIAL=
 ADSB_SDR_PPM=0
 
+# Enable aircraft database for type codes (B738, A321, etc.)
+# Path is correct for sdr-enthusiasts/docker-adsb-ultrafeeder container
+READSB_EXTRA_ARGS=--db-file=/usr/local/share/tar1090/aircraft.csv.gz
+
 MULTIFEEDER_UUID=$MULTIFEEDER_UUID
 ADSBX_UUID=$ADSBX_UUID
 FR24KEY=$FR24KEY
@@ -2106,7 +2138,7 @@ cat > dashboard-config.js << JSEOF
 // Auto-generated from .env - Dashboard will use these for direct links
 window.FEEDER_CONFIG = {
     adsbxUUID: "${ADSBX_UUID}",
-    adsblolUUID: "${MULTIFEEDER_UUID}",
+    adsbLolUUID: "${MULTIFEEDER_UUID}",
     fr24Key: "${FR24KEY}",
     radarboxKey: "${RADARBOX_KEY}",
     radarboxSerial: "${RADARBOX_SERIAL}",
@@ -2119,7 +2151,7 @@ echo -e "${GREEN}✓${NC}"
 
 # Start Services
 echo ""
-read -p "Start all feeders now? (y/n): " -n 1 -r
+read -p "Start all feeders now? (y/n): " -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     # Check for existing containers
@@ -2130,7 +2162,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo -e "${YELLOW}⚠${NC} Found existing EasyADSB containers:"
         echo "$EXISTING_CONTAINERS" | sed 's/^/  - /'
         echo ""
-        read -p "Stop and remove these containers? (y/n): " -n 1 -r
+        read -p "Stop and remove these containers? (y/n): " -r
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             spin "Cleaning up old containers" &
@@ -2149,7 +2181,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo ""
         echo -n "Creating logger data directory... "
         sudo mkdir -p /opt/adsb/flightlogs
-        sudo chmod 777 /opt/adsb/flightlogs
+        sudo chmod 755 /opt/adsb/flightlogs
         echo -e "${GREEN}✓${NC}"
         
         # Build logger container
