@@ -5,6 +5,56 @@ All notable changes to EasyADSB will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-01-07
+
+### Added
+
+- **Backup Service**: New backup container for easy migration and data protection
+  - Config-only backup (just `.env` and `dashboard-config.js`)
+  - Full backup (config + all flight log data)
+  - Modal UI with progress indicator and elapsed time
+  - Download link when backup completes
+- **New Personal Records**: Four additional record types tracked
+  - Lowest altitude flyover (filters ground traffic >500ft)
+  - Slowest aircraft (filters ground traffic >50kt)
+  - Earliest morning catch (00:00-06:59)
+  - Latest night catch (22:00+)
+
+### Fixed
+
+- **Critical: Achievements hanging on large databases** - Pre-computed achievement category counts in summary tables. Achievements now load in <1ms instead of hanging indefinitely on 2M+ row databases
+- **Critical: Records hanging on large databases** - Pre-computed record fields in summary tables for instant loading
+- **Hardware Guide not loading** - Fixed API URL routing through nginx instead of directly to logger
+- **Logger settings not saving** - Dashboard was calling wrong API endpoint (`/api/config` instead of `/api/settings`)
+- **Duplicate poll interval setting** - Removed confusing duplicate "Logger Poll Interval" from Display Settings
+- Backup tar "file changed" error - Now handles exit code 1 gracefully
+
+### Improved
+
+- **Logger Settings UX overhaul**
+  - Added explicit "Save Settings" button with toast confirmation
+  - Loading state shows "Loading..." while fetching saved values
+  - Dropdowns disabled until settings loaded from API
+  - "Apply Recommended Settings" button in Hardware Guide modal
+  - Settings now properly persist across page refreshes
+
+### Performance
+
+- **30 new database columns** for pre-computed statistics (eliminates expensive COUNT queries)
+- Achievement categories (widebody, Boeing, Airbus, turboprop, giant, EMS, coastguard) now tracked incrementally
+- Records calculation reduced from minutes to milliseconds
+- Overall dashboard cache loading: ~55 seconds (down from hanging indefinitely)
+
+### Migration
+
+- **Automatic schema migration** for users upgrading from 1.3.0 or earlier
+  - ALTER TABLE adds new columns automatically
+  - One-time population of achievement flags (~2 seconds)
+  - One-time population of new record fields (~2 minutes on large databases)
+  - No manual intervention required
+
+---
+
 ## [1.3.0] - 2026-01-05
 
 ### Added

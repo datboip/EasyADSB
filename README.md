@@ -32,7 +32,7 @@ EasyADSB is an **all-in-one automated setup script** that turns your Raspberry P
 - ✅ **Easy Updates** - Pull latest from GitHub with one menu option
 - ✅ **Clean Uninstall** - Remove everything when needed
 
-### Dashboard (v1.3.0)
+### Dashboard (v1.3.1)
 - **Custom Interactive Map** - Native Leaflet map with SVG aircraft icons
   - Altitude-based coloring (green → yellow → orange → red → purple)
   - Real-time heading rotation
@@ -62,6 +62,14 @@ EasyADSB is an **all-in-one automated setup script** that turns your Raspberry P
 - **Auto-Detection** - Identifies Pi 3/4/5, Zero, Zero 2 W
 - **Smart Recommendations** - Tailored poll intervals based on your hardware
 - **System Monitoring** - CPU temp, memory, disk usage, uptime
+
+### New in v1.3.1
+- **Backup Service** - One-click backup from dashboard (config-only or full with flight data)
+- **New Personal Records** - Lowest altitude, slowest aircraft, earliest/latest catches
+- **Performance Fix** - Achievements and records now load instantly on large databases (2M+ positions)
+- **Settings Save Button** - Logger poll interval and retention now save properly with confirmation
+- **Apply Recommended** - Hardware Guide can apply optimal settings for your Pi
+
 ---
 
 ## 📋 Requirements
@@ -783,13 +791,19 @@ Check your stats regularly:
 
 ### Backup Your Config
 
-**Easy way (recommended):**
+**From Dashboard (v1.3.1):**
+
+Click **Create Backup** in the Settings section to open the backup modal:
+- **Config Only** - Just `.env` and `dashboard-config.js` (~1 KB)
+- **Full Backup** - Config + all flight log data (recommended for migration)
+
+Progress bar shows backup status, and you get a download link when complete.
+
+**From command line:**
 ```bash
 ./setup.sh
 # Choose option 5 (Backup / Restore)
 ```
-
-![Backup Menu](screenshots/backup-menu.png)
 
 Backup options:
 - **Config only** (~1 KB) - Just .env and dashboard-config.js
