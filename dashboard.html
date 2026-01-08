@@ -2526,7 +2526,8 @@
                         <div style="display: flex; flex-direction: column; gap: 12px;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <label style="font-size: 13px;" title="How often the logger polls tar1090 for new aircraft data">Poll Interval</label>
-                                <select id="settings-interval" onchange="updateLoggerSettings()" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); font-size: 12px;">
+                                <select id="settings-interval" disabled style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); font-size: 12px; opacity: 0.5;">
+                                    <option value="">Loading...</option>
                                     <option value="5">5 sec</option>
                                     <option value="10">10 sec</option>
                                     <option value="15">15 sec</option>
@@ -2537,7 +2538,8 @@
 
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <label style="font-size: 13px;" title="How long to keep logged aircraft data before cleanup">Retention</label>
-                                <select id="settings-retention" onchange="updateLoggerSettings()" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); font-size: 12px;">
+                                <select id="settings-retention" disabled style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); font-size: 12px; opacity: 0.5;">
+                                    <option value="">Loading...</option>
                                     <option value="7">7 days</option>
                                     <option value="14">14 days</option>
                                     <option value="30">30 days</option>
@@ -2548,9 +2550,13 @@
                                 </select>
                             </div>
 
-                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">
+                            <button id="save-settings-btn" onclick="saveLoggerSettings()" disabled style="padding: 8px 16px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px; opacity: 0.5;">
+                                💾 Save Settings
+                            </button>
+
+                            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
                                 💡 Poll Interval: how often logger saves aircraft to database<br>
-                                🔄 Live table refresh (1s) is separate and not affected
+                                🔄 Live table refresh is separate and not affected
                             </div>
                         </div>
                     </div>
@@ -2589,20 +2595,6 @@
                             </div>
 
                             <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <label style="font-size: 13px;">Logger Poll Interval</label>
-                                <div style="display: flex; gap: 6px; align-items: center;">
-                                    <select id="settings-log-interval" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); font-size: 12px;">
-                                        <option value="5">5 sec</option>
-                                        <option value="10">10 sec</option>
-                                        <option value="15">15 sec</option>
-                                        <option value="30">30 sec</option>
-                                        <option value="60">60 sec</option>
-                                    </select>
-                                    <button onclick="saveLogInterval()" class="copy-btn" style="padding: 6px 10px; font-size: 11px;">Save</button>
-                                </div>
-                            </div>
-
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <label style="font-size: 13px;" title="Hide sensitive IDs for screenshots">Stealth Mode</label>
                                 <button onclick="toggleStealthMode()" id="stealth-btn" class="copy-btn" style="padding: 6px 12px; font-size: 11px;">
                                     <span id="stealth-icon">🙈</span> <span id="stealth-label">Off</span>
@@ -2630,6 +2622,13 @@
                             <button onclick="openHardwareGuide()" class="copy-btn" style="width: 100%; padding: 10px; font-size: 12px; justify-content: center; margin-top: 6px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
                                 ℹ️ Hardware Guide
                             </button>
+
+                            <!-- Backup for Migration -->
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                                <button onclick="openBackupModal()" class="copy-btn" style="width: 100%; padding: 10px; font-size: 12px; justify-content: center; background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; border: none;">
+                                    💾 Backup / Migrate
+                                </button>
+                            </div>
                         </div>
                         <input type="file" id="config-import-input" accept=".json" style="display: none;" onchange="handleConfigImport(event)">
                     </div>
@@ -2640,7 +2639,7 @@
 
         <!-- Version Footer -->
         <div class="footer">
-            EasyADSB v1.3.0 | 
+            EasyADSB v1.3.1 | 
             <a href="https://github.com/datboip/easyadsb" target="_blank">⭐ GitHub</a> | 
             Built with <a href="https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder" target="_blank">ultrafeeder</a>
         </div>
@@ -2736,6 +2735,93 @@
             </div>
         </div>
     </div>
+
+    <!-- Backup Modal -->
+    <div id="backupModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--border-color);">
+                <h3 style="margin: 0; font-size: 20px;">💾 Create Backup</h3>
+                <button onclick="closeBackupModal()" style="background: var(--bg-color); border: none; color: var(--text-primary); font-size: 24px; cursor: pointer; padding: 5px 12px; border-radius: 8px; line-height: 1;">×</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 24px;">
+                <!-- Backup Options -->
+                <div id="backup-options">
+                    <p style="margin: 0 0 15px 0; color: var(--text-secondary); font-size: 13px;">
+                        Create a backup to migrate to a new device or restore later.
+                    </p>
+
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <button onclick="startBackup('config')" class="backup-option-btn" style="display: flex; align-items: center; gap: 12px; padding: 15px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; text-align: left; transition: all 0.2s;">
+                            <span style="font-size: 24px;">⚙️</span>
+                            <div>
+                                <div style="font-weight: 600; color: var(--text-primary);">Config Only</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">.env + dashboard settings (~1 KB)</div>
+                            </div>
+                        </button>
+
+                        <button onclick="startBackup('full')" class="backup-option-btn" style="display: flex; align-items: center; gap: 12px; padding: 15px; background: linear-gradient(135deg, #11998e22 0%, #38ef7d22 100%); border: 2px solid #38ef7d; border-radius: 10px; cursor: pointer; text-align: left; transition: all 0.2s;">
+                            <span style="font-size: 24px;">📦</span>
+                            <div>
+                                <div style="font-weight: 600; color: var(--text-primary);">Full Backup <span style="font-size: 10px; background: #38ef7d; color: #000; padding: 2px 6px; border-radius: 4px; margin-left: 5px;">RECOMMENDED</span></div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Config + flight logs + achievements</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Backup Progress -->
+                <div id="backup-progress" style="display: none;">
+                    <div style="text-align: center; padding: 20px 0;">
+                        <div id="backup-spinner" style="font-size: 40px; margin-bottom: 15px; animation: spin 1s linear infinite;">⚙️</div>
+                        <div id="backup-progress-text" style="font-size: 14px; color: var(--text-primary); margin-bottom: 8px;">Creating backup...</div>
+                        <div id="backup-progress-detail" style="font-size: 12px; color: var(--text-secondary);">Compressing flight data, this may take a few minutes...</div>
+                    </div>
+                    <div style="background: var(--bg-color); border-radius: 8px; height: 6px; overflow: hidden; margin-top: 15px;">
+                        <div id="backup-progress-bar" style="background: linear-gradient(90deg, #11998e, #38ef7d); height: 100%; width: 0%; transition: width 0.3s; animation: progress-pulse 1.5s ease-in-out infinite;"></div>
+                    </div>
+                </div>
+
+                <!-- Backup Complete -->
+                <div id="backup-complete" style="display: none;">
+                    <div style="text-align: center; padding: 20px 0;">
+                        <div style="font-size: 50px; margin-bottom: 15px;">✅</div>
+                        <div style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 5px;">Backup Complete!</div>
+                        <div id="backup-size" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;"></div>
+
+                        <a id="backup-download-link" href="#" download style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                            ⬇️ Download Backup
+                        </a>
+
+                        <div style="margin-top: 15px; padding: 12px; background: var(--bg-color); border-radius: 8px; text-align: left;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 5px;">📍 Saved to:</div>
+                            <code id="backup-path" style="font-size: 11px; color: var(--text-primary); word-break: break-all;"></code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backup Error -->
+                <div id="backup-error" style="display: none;">
+                    <div style="text-align: center; padding: 20px 0;">
+                        <div style="font-size: 50px; margin-bottom: 15px;">❌</div>
+                        <div style="font-size: 16px; font-weight: 600; color: #e74c3c; margin-bottom: 10px;">Backup Failed</div>
+                        <div id="backup-error-msg" style="font-size: 13px; color: var(--text-secondary);"></div>
+                        <button onclick="resetBackupModal()" style="margin-top: 15px; padding: 10px 20px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; color: var(--text-primary);">Try Again</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes progress-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .backup-option-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+    </style>
 
     <!-- Load station IDs from generated config (created by setup.sh) -->
     <script>
@@ -3223,7 +3309,7 @@
             error.style.display = 'none';
 
             try {
-                const response = await fetch('/api/system/hardware');
+                const response = await fetch(`http://${location.hostname}:${LOGGER_PORT}/api/system/hardware`);
                 if (!response.ok) throw new Error('Failed to fetch');
                 const data = await response.json();
 
@@ -3309,6 +3395,15 @@
                             ⚠️ <strong>Performance Warning:</strong> Your poll interval (${currentInterval}s) is faster than recommended (${recommendedInterval}s) for your hardware. This may cause high CPU usage or missed data.
                         </div>
                     ` : ''}
+                    ${!intervalMatch || !retentionMatch ? `
+                        <button onclick="applyRecommendedSettings(${recommendedInterval}, ${recommendedRetention})" style="margin-top: 14px; width: 100%; padding: 10px 16px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px;">
+                            ✨ Apply Recommended Settings
+                        </button>
+                    ` : `
+                        <div style="margin-top: 14px; padding: 10px; background: rgba(16, 185, 129, 0.1); border-radius: 6px; font-size: 12px; color: #10b981; text-align: center;">
+                            ✅ Your settings are optimal for this hardware
+                        </div>
+                    `}
                 `;
 
                 // Populate settings explanations
@@ -6133,7 +6228,8 @@
                     }
                     
                     await loadLoggerStats();
-                    
+                    await loadLoggerSettings();
+
                     // Initialize leaderboard
                     initLeaderboard();
 
@@ -6309,28 +6405,67 @@
         // SETTINGS
         // ══════════════════════════════════════════════════════════════════════
         
-        // Update logger settings
-        async function updateLoggerSettings() {
-            if (!loggerAvailable) return;
-            
+        // Save logger settings with feedback
+        async function saveLoggerSettings() {
+            if (!loggerAvailable) {
+                showToast('Logger not available', 'error');
+                return;
+            }
+
             const interval = document.getElementById('settings-interval').value;
             const retention = document.getElementById('settings-retention').value;
-            
+
             try {
-                const response = await fetch(`${LOGGER_URL}/api/config`, {
+                const response = await fetch(`${LOGGER_URL}/api/settings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ interval: parseInt(interval), retention_days: parseInt(retention) })
                 });
-                
+
                 if (response.ok) {
+                    const data = await response.json();
                     updateSettingsSummary();
+                    const retentionText = data.retention_days === 0 ? 'Forever' : data.retention_days + ' days';
+                    showToast(`Settings saved: ${data.interval}s interval, ${retentionText} retention`);
+                } else {
+                    showToast('Failed to save settings', 'error');
                 }
             } catch (error) {
-                console.error('Error updating logger settings:', error);
+                console.error('Error saving logger settings:', error);
+                showToast('Error saving settings', 'error');
             }
         }
-        
+
+        // Legacy function for compatibility
+        async function updateLoggerSettings() {
+            await saveLoggerSettings();
+        }
+
+        // Apply recommended settings from Hardware Guide
+        async function applyRecommendedSettings(interval, retention) {
+            if (!loggerAvailable) return;
+
+            try {
+                const response = await fetch(`${LOGGER_URL}/api/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ interval: parseInt(interval), retention_days: parseInt(retention) })
+                });
+
+                if (response.ok) {
+                    // Update the dropdowns to reflect new values
+                    document.getElementById('settings-interval').value = interval;
+                    document.getElementById('settings-retention').value = retention;
+                    updateSettingsSummary();
+
+                    // Refresh the Hardware Guide to show updated status
+                    showHardwareGuide();
+                }
+            } catch (error) {
+                console.error('Error applying recommended settings:', error);
+            }
+        }
+
         // Set theme with button state
         function setTheme(theme) {
             document.documentElement.setAttribute('data-theme', theme);
@@ -6386,25 +6521,6 @@
             toast.textContent = message;
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
-        }
-
-        // Save logger poll interval
-        async function saveLogInterval() {
-            const interval = parseInt(document.getElementById('settings-log-interval').value);
-            try {
-                const response = await fetch(`http://${location.hostname}:${LOGGER_PORT}/api/userconfig`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ interval: interval })
-                });
-                if (response.ok) {
-                    showToast(`Logger interval saved: ${interval}s`);
-                } else {
-                    showToast('Failed to save interval', 'error');
-                }
-            } catch (e) {
-                showToast('Logger not available', 'error');
-            }
         }
 
         // Load logger interval on startup
@@ -6507,7 +6623,103 @@
             
             alert('✓ All data refreshed!');
         }
-        
+
+        // Backup Modal Functions
+        const BACKUP_PORT = 8085;
+
+        function openBackupModal() {
+            resetBackupModal();
+            document.getElementById('backupModal').classList.add('active');
+        }
+
+        function closeBackupModal() {
+            document.getElementById('backupModal').classList.remove('active');
+        }
+
+        function resetBackupModal() {
+            document.getElementById('backup-options').style.display = 'block';
+            document.getElementById('backup-progress').style.display = 'none';
+            document.getElementById('backup-complete').style.display = 'none';
+            document.getElementById('backup-error').style.display = 'none';
+        }
+
+        async function startBackup(type) {
+            // Show progress
+            document.getElementById('backup-options').style.display = 'none';
+            document.getElementById('backup-progress').style.display = 'block';
+
+            const progressBar = document.getElementById('backup-progress-bar');
+            const progressText = document.getElementById('backup-progress-text');
+            const progressDetail = document.getElementById('backup-progress-detail');
+
+            // Show elapsed time instead of fake progress
+            const startTime = Date.now();
+            progressBar.style.width = '100%';
+            progressBar.style.animation = 'progress-pulse 1.5s ease-in-out infinite';
+
+            const timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const mins = Math.floor(elapsed / 60);
+                const secs = elapsed % 60;
+                const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+                if (type === 'config') {
+                    progressDetail.textContent = `Saving config files... (${timeStr})`;
+                } else {
+                    progressDetail.textContent = `Compressing ~2GB of flight data... (${timeStr})`;
+                }
+            }, 1000);
+
+            if (type === 'config') {
+                progressText.textContent = 'Backing up config...';
+                progressDetail.textContent = 'Saving .env and dashboard settings...';
+            } else {
+                progressText.textContent = 'Creating full backup...';
+                progressDetail.textContent = 'Compressing flight logs and achievements (this may take 2-5 minutes)...';
+            }
+
+            const progressInterval = timerInterval; // Use same variable for cleanup
+
+            try {
+                const response = await fetch(`http://${location.hostname}:${BACKUP_PORT}/api/backup/create/${type}`, {
+                    method: 'POST'
+                });
+
+                clearInterval(progressInterval);
+
+                if (!response.ok) throw new Error('Backup service not available. Make sure the backup container is running.');
+
+                const data = await response.json();
+
+                if (data.success) {
+                    progressBar.style.width = '100%';
+
+                    // Show complete
+                    setTimeout(() => {
+                        document.getElementById('backup-progress').style.display = 'none';
+                        document.getElementById('backup-complete').style.display = 'block';
+
+                        const sizeMB = (data.size / 1024 / 1024).toFixed(1);
+                        document.getElementById('backup-size').textContent = `${data.filename} (${sizeMB} MB)`;
+                        document.getElementById('backup-download-link').href = `http://${location.hostname}:${BACKUP_PORT}${data.download_url}`;
+                        document.getElementById('backup-path').textContent = `/home/skynet/easyadsb/backups/${data.filename}`;
+                    }, 500);
+                } else {
+                    throw new Error(data.error || 'Backup failed');
+                }
+            } catch (err) {
+                clearInterval(progressInterval);
+                document.getElementById('backup-progress').style.display = 'none';
+                document.getElementById('backup-error').style.display = 'block';
+                document.getElementById('backup-error-msg').textContent = err.message;
+            }
+        }
+
+        // Close backup modal on background click
+        document.getElementById('backupModal')?.addEventListener('click', function(e) {
+            if (e.target === this) closeBackupModal();
+        });
+
         // Update settings summary for collapsed state
         function updateSettingsSummary() {
             const summary = document.getElementById('settings-summary');
@@ -6549,16 +6761,32 @@
         
         // Load logger settings from API
         async function loadLoggerSettings() {
+            const intervalEl = document.getElementById('settings-interval');
+            const retentionEl = document.getElementById('settings-retention');
+            const saveBtn = document.getElementById('save-settings-btn');
+
             try {
-                const response = await fetch(`${LOGGER_URL}/api/config`);
+                const response = await fetch(`${LOGGER_URL}/api/settings`);
                 if (response.ok) {
                     const config = await response.json();
-                    document.getElementById('settings-interval').value = config.interval || 10;
-                    document.getElementById('settings-retention').value = config.retention_days || 30;
+                    intervalEl.value = config.interval || 10;
+                    retentionEl.value = config.retention_days || 30;
+
+                    // Enable controls
+                    intervalEl.disabled = false;
+                    retentionEl.disabled = false;
+                    saveBtn.disabled = false;
+                    intervalEl.style.opacity = '1';
+                    retentionEl.style.opacity = '1';
+                    saveBtn.style.opacity = '1';
+
                     updateSettingsSummary();
                 }
             } catch (error) {
                 console.log('Could not load logger settings');
+                // Show error state
+                intervalEl.options[0].text = 'Error';
+                retentionEl.options[0].text = 'Error';
             }
         }
         
