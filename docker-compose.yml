@@ -1,6 +1,6 @@
 # EasyADSB - Docker Compose Configuration
-# Version: 1.3.0
-# Last Updated: 2025-12-13
+# Version: 1.3.1
+# Last Updated: 2026-01-07
 #
 # Services: ultrafeeder, dashboard, flightradar24, radarbox, piaware, logger
 # Credits: sdr-enthusiasts for the amazing feeder containers
@@ -127,3 +127,15 @@ services:
       - BEASTPORT=30005
       - TZ=${FEEDER_TZ}
       - FR24KEY=${FR24KEY}
+
+  backup:
+    build: ./backup
+    container_name: easyadsb-backup
+    restart: unless-stopped
+    ports:
+      - "${BACKUP_PORT:-8085}:8085"
+    volumes:
+      - ./.env:/config/.env:ro
+      - ./dashboard-config.js:/config/dashboard-config.js:ro
+      - /opt/adsb:/data:ro
+      - ./backups:/backups

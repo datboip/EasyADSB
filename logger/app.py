@@ -224,8 +224,24 @@ def init_db():
             best_rssi_timestamp TEXT,
             lowest_altitude INTEGER,
             lowest_altitude_icao TEXT,
+            lowest_altitude_callsign TEXT,
+            lowest_altitude_type TEXT,
+            lowest_altitude_timestamp TEXT,
             slowest_speed INTEGER,
             slowest_speed_icao TEXT,
+            slowest_speed_callsign TEXT,
+            slowest_speed_type TEXT,
+            slowest_speed_timestamp TEXT,
+            earliest_catch_time TEXT,
+            earliest_catch_icao TEXT,
+            earliest_catch_callsign TEXT,
+            earliest_catch_timestamp TEXT,
+            earliest_catch_type TEXT,
+            latest_catch_time TEXT,
+            latest_catch_icao TEXT,
+            latest_catch_callsign TEXT,
+            latest_catch_timestamp TEXT,
+            latest_catch_type TEXT,
             -- Misc
             emergency_count INTEGER DEFAULT 0,
             hours_covered INTEGER DEFAULT 0,
@@ -233,7 +249,15 @@ def init_db():
             busiest_day_count INTEGER DEFAULT 0,
             max_streak INTEGER DEFAULT 0,
             intl_carriers_seen TEXT,
-            last_updated TEXT
+            last_updated TEXT,
+            -- Achievement category counts (from aircraft_summary flags)
+            widebody_count INTEGER DEFAULT 0,
+            boeing_count INTEGER DEFAULT 0,
+            airbus_count INTEGER DEFAULT 0,
+            turboprop_count INTEGER DEFAULT 0,
+            giant_count INTEGER DEFAULT 0,
+            ems_heli_count INTEGER DEFAULT 0,
+            coastguard_count INTEGER DEFAULT 0
         )
     ''')
 
@@ -255,7 +279,15 @@ def init_db():
             is_helicopter INTEGER DEFAULT 0,
             is_cargo INTEGER DEFAULT 0,
             is_commercial INTEGER DEFAULT 0,
-            airline TEXT
+            airline TEXT,
+            -- Achievement category flags (for fast counting)
+            is_widebody INTEGER DEFAULT 0,
+            is_boeing INTEGER DEFAULT 0,
+            is_airbus INTEGER DEFAULT 0,
+            is_turboprop INTEGER DEFAULT 0,
+            is_giant INTEGER DEFAULT 0,
+            is_ems_heli INTEGER DEFAULT 0,
+            is_coastguard INTEGER DEFAULT 0
         )
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_aircraft_summary_sessions ON aircraft_summary(session_count DESC)')
@@ -287,8 +319,241 @@ def init_db():
         )
     ''')
 
+    # Migrate existing databases: add new columns if they don't exist
+    # This handles upgrading from older schema versions
+    stats_new_columns = [
+        ('widebody_count', 'INTEGER DEFAULT 0'),
+        ('boeing_count', 'INTEGER DEFAULT 0'),
+        ('airbus_count', 'INTEGER DEFAULT 0'),
+        ('turboprop_count', 'INTEGER DEFAULT 0'),
+        ('giant_count', 'INTEGER DEFAULT 0'),
+        ('ems_heli_count', 'INTEGER DEFAULT 0'),
+        ('coastguard_count', 'INTEGER DEFAULT 0'),
+        # Additional records fields (v1.3.1)
+        ('lowest_altitude_callsign', 'TEXT'),
+        ('lowest_altitude_type', 'TEXT'),
+        ('lowest_altitude_timestamp', 'TEXT'),
+        ('slowest_speed_callsign', 'TEXT'),
+        ('slowest_speed_type', 'TEXT'),
+        ('slowest_speed_timestamp', 'TEXT'),
+        ('earliest_catch_time', 'TEXT'),
+        ('earliest_catch_icao', 'TEXT'),
+        ('earliest_catch_callsign', 'TEXT'),
+        ('earliest_catch_timestamp', 'TEXT'),
+        ('earliest_catch_type', 'TEXT'),
+        ('latest_catch_time', 'TEXT'),
+        ('latest_catch_icao', 'TEXT'),
+        ('latest_catch_callsign', 'TEXT'),
+        ('latest_catch_timestamp', 'TEXT'),
+        ('latest_catch_type', 'TEXT'),
+    ]
+    for col_name, col_type in stats_new_columns:
+        try:
+            cursor.execute(f'ALTER TABLE stats_summary ADD COLUMN {col_name} {col_type}')
+            log.info(f"Added column {col_name} to stats_summary")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+    aircraft_new_columns = [
+        ('is_widebody', 'INTEGER DEFAULT 0'),
+        ('is_boeing', 'INTEGER DEFAULT 0'),
+        ('is_airbus', 'INTEGER DEFAULT 0'),
+        ('is_turboprop', 'INTEGER DEFAULT 0'),
+        ('is_giant', 'INTEGER DEFAULT 0'),
+        ('is_ems_heli', 'INTEGER DEFAULT 0'),
+        ('is_coastguard', 'INTEGER DEFAULT 0'),
+    ]
+    for col_name, col_type in aircraft_new_columns:
+        try:
+            cursor.execute(f'ALTER TABLE aircraft_summary ADD COLUMN {col_name} {col_type}')
+            log.info(f"Added column {col_name} to aircraft_summary")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
     # Initialize stats_summary with a single row if not exists
     cursor.execute('INSERT OR IGNORE INTO stats_summary (id) VALUES (1)')
+
+    # Check if we need to populate the new achievement columns (migration)
+    # If widebody_count is 0 but we have aircraft data, run the migration
+    cursor.execute('SELECT widebody_count FROM stats_summary WHERE id = 1')
+    row = cursor.fetchone()
+    cursor.execute('SELECT COUNT(*) FROM aircraft_summary')
+    aircraft_count = cursor.fetchone()[0]
+
+    if row and row[0] == 0 and aircraft_count > 0:
+        log.info("Migrating achievement flags for existing aircraft...")
+        # We need to populate the flags - this will be done by reading aircraft_type
+        # and callsigns from aircraft_summary and computing the flags
+        cursor.execute('SELECT icao, aircraft_type, callsigns FROM aircraft_summary')
+        rows = cursor.fetchall()
+
+        widebody_total = 0
+        boeing_total = 0
+        airbus_total = 0
+        turboprop_total = 0
+        giant_total = 0
+        ems_total = 0
+        coastguard_total = 0
+
+        for icao, atype, callsigns in rows:
+            # Import helper functions here - they're defined later in the file
+            # so we use inline logic for the migration
+            atype_upper = (atype or '').upper()
+
+            # Widebody check
+            widebodies = ['B744', 'B748', 'B772', 'B773', 'B77L', 'B77W', 'B788', 'B789', 'B78X',
+                          'A332', 'A333', 'A338', 'A339', 'A342', 'A343', 'A345', 'A346', 'A359', 'A35K', 'A380', 'A388']
+            is_wb = 1 if atype_upper in widebodies else 0
+
+            # Boeing check
+            is_boe = 1 if (atype_upper.startswith('B7') or atype_upper.startswith('B73') or
+                          atype_upper.startswith('B74') or atype_upper.startswith('B75') or
+                          atype_upper.startswith('B76') or atype_upper.startswith('B78')) else 0
+
+            # Airbus check
+            is_air = 1 if (atype_upper.startswith('A3') or atype_upper.startswith('A2')) else 0
+
+            # Turboprop check
+            is_turbo = 1 if (atype_upper.startswith('DH8') or atype_upper.startswith('AT') or
+                            atype_upper == 'SF34' or atype_upper.startswith('BE') or
+                            atype_upper == 'C208') else 0
+
+            # Giant check
+            giants = ['A380', 'A388', 'B748', 'AN124', 'AN225', 'C5', 'C5M', 'C17', 'B52']
+            is_gi = 1 if atype_upper in giants else 0
+
+            # EMS helicopter check
+            ems_types = ['EC35', 'EC45', 'AS50', 'AS55', 'B407', 'B429', 'B412', 'B206',
+                         'A109', 'A139', 'A169', 'S76', 'MD52', 'MD50', 'BK17', 'H145', 'H135']
+            is_ems = 1 if atype_upper in ems_types else 0
+
+            # Coastguard check (from callsigns)
+            is_cg = 0
+            if callsigns:
+                for cs in callsigns.split(','):
+                    cs_upper = cs.upper().strip()
+                    if cs_upper.startswith('COAST') or cs_upper.startswith('USCG') or cs_upper.startswith('CG'):
+                        is_cg = 1
+                        break
+
+            cursor.execute('''
+                UPDATE aircraft_summary
+                SET is_widebody = ?, is_boeing = ?, is_airbus = ?, is_turboprop = ?,
+                    is_giant = ?, is_ems_heli = ?, is_coastguard = ?
+                WHERE icao = ?
+            ''', (is_wb, is_boe, is_air, is_turbo, is_gi, is_ems, is_cg, icao))
+
+            widebody_total += is_wb
+            boeing_total += is_boe
+            airbus_total += is_air
+            turboprop_total += is_turbo
+            giant_total += is_gi
+            ems_total += is_ems
+            coastguard_total += is_cg
+
+        # Update stats_summary with the totals
+        cursor.execute('''
+            UPDATE stats_summary SET
+                widebody_count = ?,
+                boeing_count = ?,
+                airbus_count = ?,
+                turboprop_count = ?,
+                giant_count = ?,
+                ems_heli_count = ?,
+                coastguard_count = ?
+            WHERE id = 1
+        ''', (widebody_total, boeing_total, airbus_total, turboprop_total,
+              giant_total, ems_total, coastguard_total))
+
+        log.info(f"Migration complete: {widebody_total} widebody, {boeing_total} Boeing, "
+                 f"{airbus_total} Airbus, {turboprop_total} turboprop, {giant_total} giant, "
+                 f"{ems_total} EMS, {coastguard_total} coastguard")
+
+    # Check if new record fields need to be populated (v1.3.1 migration)
+    # These are NULL if upgrading from 1.3.0
+    cursor.execute('SELECT lowest_altitude, total_positions FROM stats_summary WHERE id = 1')
+    row = cursor.fetchone()
+    if row and row['total_positions'] and row['total_positions'] > 0 and row['lowest_altitude'] is None:
+        log.info("Migrating v1.3.1 record fields...")
+
+        # Lowest altitude (> 500ft to filter ground)
+        cursor.execute('''
+            SELECT icao, callsign, altitude, timestamp, aircraft_type
+            FROM positions WHERE altitude IS NOT NULL AND altitude > 500
+            ORDER BY altitude ASC LIMIT 1
+        ''')
+        lowest = cursor.fetchone()
+
+        # Slowest (> 50kt to filter ground)
+        cursor.execute('''
+            SELECT icao, callsign, speed, timestamp, aircraft_type
+            FROM positions WHERE speed IS NOT NULL AND speed > 50
+            ORDER BY speed ASC LIMIT 1
+        ''')
+        slowest = cursor.fetchone()
+
+        # Earliest morning catch (00:00-06:59)
+        cursor.execute('''
+            SELECT icao, callsign, timestamp, aircraft_type, strftime('%H:%M', timestamp) as time_of_day
+            FROM positions WHERE strftime('%H', timestamp) BETWEEN '00' AND '06'
+            ORDER BY strftime('%H:%M', timestamp) ASC LIMIT 1
+        ''')
+        earliest = cursor.fetchone()
+
+        # Latest night catch (22:00+)
+        cursor.execute('''
+            SELECT icao, callsign, timestamp, aircraft_type, strftime('%H:%M', timestamp) as time_of_day
+            FROM positions WHERE strftime('%H', timestamp) >= '22'
+            ORDER BY strftime('%H:%M', timestamp) DESC LIMIT 1
+        ''')
+        latest = cursor.fetchone()
+
+        cursor.execute('''
+            UPDATE stats_summary SET
+                lowest_altitude = ?,
+                lowest_altitude_icao = ?,
+                lowest_altitude_callsign = ?,
+                lowest_altitude_type = ?,
+                lowest_altitude_timestamp = ?,
+                slowest_speed = ?,
+                slowest_speed_icao = ?,
+                slowest_speed_callsign = ?,
+                slowest_speed_type = ?,
+                slowest_speed_timestamp = ?,
+                earliest_catch_time = ?,
+                earliest_catch_icao = ?,
+                earliest_catch_callsign = ?,
+                earliest_catch_timestamp = ?,
+                earliest_catch_type = ?,
+                latest_catch_time = ?,
+                latest_catch_icao = ?,
+                latest_catch_callsign = ?,
+                latest_catch_timestamp = ?,
+                latest_catch_type = ?
+            WHERE id = 1
+        ''', (
+            lowest['altitude'] if lowest else None,
+            lowest['icao'] if lowest else None,
+            lowest['callsign'] if lowest else None,
+            lowest['aircraft_type'] if lowest else None,
+            lowest['timestamp'] if lowest else None,
+            slowest['speed'] if slowest else None,
+            slowest['icao'] if slowest else None,
+            slowest['callsign'] if slowest else None,
+            slowest['aircraft_type'] if slowest else None,
+            slowest['timestamp'] if slowest else None,
+            earliest['time_of_day'] if earliest else None,
+            earliest['icao'] if earliest else None,
+            earliest['callsign'] if earliest else None,
+            earliest['timestamp'] if earliest else None,
+            earliest['aircraft_type'] if earliest else None,
+            latest['time_of_day'] if latest else None,
+            latest['icao'] if latest else None,
+            latest['callsign'] if latest else None,
+            latest['timestamp'] if latest else None,
+            latest['aircraft_type'] if latest else None
+        ))
+        log.info("v1.3.1 record fields migration complete")
 
     conn.commit()
     conn.close()
@@ -361,6 +626,69 @@ def is_cargo_aircraft(callsign, aircraft_type):
         return True
 
     return False
+
+
+def is_widebody_aircraft(aircraft_type):
+    """Check if aircraft is a widebody (747, 777, 787, A330, A350, A380)."""
+    if not aircraft_type:
+        return False
+    t = aircraft_type.upper()
+    widebodies = ['B744', 'B748', 'B772', 'B773', 'B77L', 'B77W', 'B788', 'B789', 'B78X',
+                  'A332', 'A333', 'A338', 'A339', 'A342', 'A343', 'A345', 'A346', 'A359', 'A35K', 'A380', 'A388']
+    return t in widebodies
+
+
+def is_boeing_aircraft(aircraft_type):
+    """Check if aircraft is a Boeing."""
+    if not aircraft_type:
+        return False
+    t = aircraft_type.upper()
+    return (t.startswith('B7') or t.startswith('B73') or t.startswith('B74') or
+            t.startswith('B75') or t.startswith('B76') or t.startswith('B78'))
+
+
+def is_airbus_aircraft(aircraft_type):
+    """Check if aircraft is an Airbus."""
+    if not aircraft_type:
+        return False
+    t = aircraft_type.upper()
+    return t.startswith('A3') or t.startswith('A2')
+
+
+def is_turboprop_aircraft(aircraft_type):
+    """Check if aircraft is a turboprop (Dash 8, ATR, Beech, Cessna Caravan)."""
+    if not aircraft_type:
+        return False
+    t = aircraft_type.upper()
+    return (t.startswith('DH8') or t.startswith('AT') or t == 'SF34' or
+            t.startswith('BE') or t == 'C208')
+
+
+def is_giant_aircraft(aircraft_type):
+    """Check if aircraft is a giant (A380, 747-8, C-5, C-17, An-124, B-52)."""
+    if not aircraft_type:
+        return False
+    t = aircraft_type.upper()
+    giants = ['A380', 'A388', 'B748', 'AN124', 'AN225', 'C5', 'C5M', 'C17', 'B52']
+    return t in giants
+
+
+def is_ems_helicopter(aircraft_type):
+    """Check if aircraft is an EMS-type helicopter."""
+    if not aircraft_type:
+        return False
+    t = aircraft_type.upper()
+    ems_types = ['EC35', 'EC45', 'AS50', 'AS55', 'B407', 'B429', 'B412', 'B206',
+                 'A109', 'A139', 'A169', 'S76', 'MD52', 'MD50', 'BK17', 'H145', 'H135']
+    return t in ems_types
+
+
+def is_coastguard_aircraft(callsign):
+    """Check if aircraft is Coast Guard based on callsign."""
+    if not callsign:
+        return False
+    cs = callsign.upper().strip()
+    return cs.startswith('COAST') or cs.startswith('USCG') or cs.startswith('CG')
 
 
 def is_commercial_aircraft(callsign):
@@ -472,12 +800,21 @@ def backfill_summary_tables():
         is_cargo_flag = 1 if is_cargo_aircraft(callsign, aircraft_type) else 0
         is_comm = 1 if is_commercial_aircraft(callsign) else 0
         airline = get_airline_code(callsign)
+        # Achievement category flags
+        is_wb = 1 if is_widebody_aircraft(aircraft_type) else 0
+        is_boeing = 1 if is_boeing_aircraft(aircraft_type) else 0
+        is_airbus = 1 if is_airbus_aircraft(aircraft_type) else 0
+        is_turbo = 1 if is_turboprop_aircraft(aircraft_type) else 0
+        is_giant = 1 if is_giant_aircraft(aircraft_type) else 0
+        is_ems = 1 if is_ems_helicopter(aircraft_type) else 0
+        is_cg = 1 if is_coastguard_aircraft(callsign) else 0
 
         cursor.execute('''
             UPDATE aircraft_summary
-            SET is_military = ?, is_helicopter = ?, is_cargo = ?, is_commercial = ?, airline = ?
+            SET is_military = ?, is_helicopter = ?, is_cargo = ?, is_commercial = ?, airline = ?,
+                is_widebody = ?, is_boeing = ?, is_airbus = ?, is_turboprop = ?, is_giant = ?, is_ems_heli = ?, is_coastguard = ?
             WHERE icao = ?
-        ''', (is_mil, is_heli, is_cargo_flag, is_comm, airline, icao))
+        ''', (is_mil, is_heli, is_cargo_flag, is_comm, airline, is_wb, is_boeing, is_airbus, is_turbo, is_giant, is_ems, is_cg, icao))
 
     conn.commit()
 
@@ -558,6 +895,22 @@ def backfill_summary_tables():
     cursor.execute('SELECT COUNT(*) FROM aircraft_summary WHERE is_cargo = 1')
     cargo_count = cursor.fetchone()[0]
 
+    # Achievement category counts
+    cursor.execute('SELECT COUNT(*) FROM aircraft_summary WHERE is_widebody = 1')
+    widebody_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM aircraft_summary WHERE is_boeing = 1')
+    boeing_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM aircraft_summary WHERE is_airbus = 1')
+    airbus_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM aircraft_summary WHERE is_turboprop = 1')
+    turboprop_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM aircraft_summary WHERE is_giant = 1')
+    giant_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM aircraft_summary WHERE is_ems_heli = 1')
+    ems_heli_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM aircraft_summary WHERE is_coastguard = 1')
+    coastguard_count = cursor.fetchone()[0]
+
     # Airline counts
     cursor.execute("SELECT COUNT(*) FROM aircraft_summary WHERE airline = 'DAL'")
     delta_count = cursor.fetchone()[0]
@@ -604,6 +957,38 @@ def backfill_summary_tables():
         ORDER BY rssi DESC LIMIT 1
     ''')
     best_rssi_row = cursor.fetchone()
+
+    # Lowest altitude (> 500ft to filter ground)
+    cursor.execute('''
+        SELECT icao, callsign, altitude, timestamp, aircraft_type
+        FROM positions WHERE altitude IS NOT NULL AND altitude > 500
+        ORDER BY altitude ASC LIMIT 1
+    ''')
+    lowest_alt_row = cursor.fetchone()
+
+    # Slowest (> 50kt to filter ground)
+    cursor.execute('''
+        SELECT icao, callsign, speed, timestamp, aircraft_type
+        FROM positions WHERE speed IS NOT NULL AND speed > 50
+        ORDER BY speed ASC LIMIT 1
+    ''')
+    slowest_row = cursor.fetchone()
+
+    # Earliest morning catch (00:00-06:59)
+    cursor.execute('''
+        SELECT icao, callsign, timestamp, aircraft_type, strftime('%H:%M', timestamp) as time_of_day
+        FROM positions WHERE strftime('%H', timestamp) BETWEEN '00' AND '06'
+        ORDER BY strftime('%H:%M', timestamp) ASC LIMIT 1
+    ''')
+    earliest_row = cursor.fetchone()
+
+    # Latest night catch (22:00+)
+    cursor.execute('''
+        SELECT icao, callsign, timestamp, aircraft_type, strftime('%H:%M', timestamp) as time_of_day
+        FROM positions WHERE strftime('%H', timestamp) >= '22'
+        ORDER BY strftime('%H:%M', timestamp) DESC LIMIT 1
+    ''')
+    latest_row = cursor.fetchone()
 
     # Busiest day
     cursor.execute('''
@@ -695,7 +1080,34 @@ def backfill_summary_tables():
             busiest_day_count = ?,
             max_streak = ?,
             intl_carriers_seen = ?,
-            last_updated = ?
+            last_updated = ?,
+            widebody_count = ?,
+            boeing_count = ?,
+            airbus_count = ?,
+            turboprop_count = ?,
+            giant_count = ?,
+            ems_heli_count = ?,
+            coastguard_count = ?,
+            lowest_altitude = ?,
+            lowest_altitude_icao = ?,
+            lowest_altitude_callsign = ?,
+            lowest_altitude_type = ?,
+            lowest_altitude_timestamp = ?,
+            slowest_speed = ?,
+            slowest_speed_icao = ?,
+            slowest_speed_callsign = ?,
+            slowest_speed_type = ?,
+            slowest_speed_timestamp = ?,
+            earliest_catch_time = ?,
+            earliest_catch_icao = ?,
+            earliest_catch_callsign = ?,
+            earliest_catch_timestamp = ?,
+            earliest_catch_type = ?,
+            latest_catch_time = ?,
+            latest_catch_icao = ?,
+            latest_catch_callsign = ?,
+            latest_catch_timestamp = ?,
+            latest_catch_type = ?
         WHERE id = 1
     ''', (
         total_positions,
@@ -736,7 +1148,34 @@ def backfill_summary_tables():
         busiest_row['count'] if busiest_row else 0,
         max_streak,
         intl_carriers_str,
-        datetime.now().isoformat()
+        datetime.now().isoformat(),
+        widebody_count,
+        boeing_count,
+        airbus_count,
+        turboprop_count,
+        giant_count,
+        ems_heli_count,
+        coastguard_count,
+        lowest_alt_row['altitude'] if lowest_alt_row else None,
+        lowest_alt_row['icao'] if lowest_alt_row else None,
+        lowest_alt_row['callsign'] if lowest_alt_row else None,
+        lowest_alt_row['aircraft_type'] if lowest_alt_row else None,
+        lowest_alt_row['timestamp'] if lowest_alt_row else None,
+        slowest_row['speed'] if slowest_row else None,
+        slowest_row['icao'] if slowest_row else None,
+        slowest_row['callsign'] if slowest_row else None,
+        slowest_row['aircraft_type'] if slowest_row else None,
+        slowest_row['timestamp'] if slowest_row else None,
+        earliest_row['time_of_day'] if earliest_row else None,
+        earliest_row['icao'] if earliest_row else None,
+        earliest_row['callsign'] if earliest_row else None,
+        earliest_row['timestamp'] if earliest_row else None,
+        earliest_row['aircraft_type'] if earliest_row else None,
+        latest_row['time_of_day'] if latest_row else None,
+        latest_row['icao'] if latest_row else None,
+        latest_row['callsign'] if latest_row else None,
+        latest_row['timestamp'] if latest_row else None,
+        latest_row['aircraft_type'] if latest_row else None
     ))
 
     conn.commit()
@@ -849,15 +1288,47 @@ def update_summary_tables_incremental(aircraft_data, timestamp):
             is_cargo_flag = 1 if is_cargo_aircraft(callsign, aircraft_type) else 0
             is_comm = 1 if is_commercial_aircraft(callsign) else 0
             airline = get_airline_code(callsign)
+            # Achievement category flags
+            is_wb = 1 if is_widebody_aircraft(aircraft_type) else 0
+            is_boeing = 1 if is_boeing_aircraft(aircraft_type) else 0
+            is_airbus = 1 if is_airbus_aircraft(aircraft_type) else 0
+            is_turbo = 1 if is_turboprop_aircraft(aircraft_type) else 0
+            is_giant = 1 if is_giant_aircraft(aircraft_type) else 0
+            is_ems = 1 if is_ems_helicopter(aircraft_type) else 0
+            is_cg = 1 if is_coastguard_aircraft(callsign) else 0
 
             cursor.execute('''
                 INSERT INTO aircraft_summary (
                     icao, position_count, session_count, days_seen, first_seen, last_seen,
                     last_session_key, aircraft_type, callsigns, max_altitude, max_speed,
-                    is_military, is_helicopter, is_cargo, is_commercial, airline
-                ) VALUES (?, 1, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    is_military, is_helicopter, is_cargo, is_commercial, airline,
+                    is_widebody, is_boeing, is_airbus, is_turboprop, is_giant, is_ems_heli, is_coastguard
+                ) VALUES (?, 1, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (icao, timestamp, timestamp, ac_session_key, aircraft_type,
-                  callsign or '', altitude, speed, is_mil, is_heli, is_cargo_flag, is_comm, airline))
+                  callsign or '', altitude, speed, is_mil, is_heli, is_cargo_flag, is_comm, airline,
+                  is_wb, is_boeing, is_airbus, is_turbo, is_giant, is_ems, is_cg))
+
+            # Update category counts in stats_summary for new aircraft
+            if is_mil:
+                cursor.execute('UPDATE stats_summary SET military_count = military_count + 1 WHERE id = 1')
+            if is_heli:
+                cursor.execute('UPDATE stats_summary SET helicopter_count = helicopter_count + 1 WHERE id = 1')
+            if is_cargo_flag:
+                cursor.execute('UPDATE stats_summary SET cargo_count = cargo_count + 1 WHERE id = 1')
+            if is_wb:
+                cursor.execute('UPDATE stats_summary SET widebody_count = widebody_count + 1 WHERE id = 1')
+            if is_boeing:
+                cursor.execute('UPDATE stats_summary SET boeing_count = boeing_count + 1 WHERE id = 1')
+            if is_airbus:
+                cursor.execute('UPDATE stats_summary SET airbus_count = airbus_count + 1 WHERE id = 1')
+            if is_turbo:
+                cursor.execute('UPDATE stats_summary SET turboprop_count = turboprop_count + 1 WHERE id = 1')
+            if is_giant:
+                cursor.execute('UPDATE stats_summary SET giant_count = giant_count + 1 WHERE id = 1')
+            if is_ems:
+                cursor.execute('UPDATE stats_summary SET ems_heli_count = ems_heli_count + 1 WHERE id = 1')
+            if is_cg:
+                cursor.execute('UPDATE stats_summary SET coastguard_count = coastguard_count + 1 WHERE id = 1')
 
         # ─────────────────────────────────────────────────────────────────────
         # Update type_summary
@@ -2450,67 +2921,41 @@ def calculate_records():
         if row:
             records['busiest_day'] = {'date': row['day'], 'count': row['count']}
 
-    # These records aren't stored in summary - query with indexes (still fast)
-    # Lowest altitude (above ground, > 500ft to filter ground)
-    cursor.execute('''
-        SELECT icao, callsign, altitude, timestamp, aircraft_type
-        FROM positions
-        WHERE altitude IS NOT NULL AND altitude > 500
-        ORDER BY altitude ASC
-        LIMIT 1
-    ''')
-    row = cursor.fetchone()
-    if row:
+    # Use pre-computed values from stats_summary for remaining records (FAST)
+    if stats and stats['lowest_altitude']:
         records['lowest_altitude'] = {
-            'icao': row['icao'], 'callsign': row['callsign'],
-            'altitude': row['altitude'], 'timestamp': row['timestamp'], 'type': row['aircraft_type']
+            'icao': stats['lowest_altitude_icao'],
+            'callsign': stats['lowest_altitude_callsign'],
+            'altitude': stats['lowest_altitude'],
+            'timestamp': stats['lowest_altitude_timestamp'],
+            'type': stats['lowest_altitude_type']
         }
 
-    # Slowest (in air, > 50kt to filter ground)
-    cursor.execute('''
-        SELECT icao, callsign, speed, timestamp, aircraft_type
-        FROM positions
-        WHERE speed IS NOT NULL AND speed > 50
-        ORDER BY speed ASC
-        LIMIT 1
-    ''')
-    row = cursor.fetchone()
-    if row:
+    if stats and stats['slowest_speed']:
         records['slowest'] = {
-            'icao': row['icao'], 'callsign': row['callsign'],
-            'speed': row['speed'], 'timestamp': row['timestamp'], 'type': row['aircraft_type']
+            'icao': stats['slowest_speed_icao'],
+            'callsign': stats['slowest_speed_callsign'],
+            'speed': stats['slowest_speed'],
+            'timestamp': stats['slowest_speed_timestamp'],
+            'type': stats['slowest_speed_type']
         }
 
-    # Earliest morning catch
-    cursor.execute('''
-        SELECT icao, callsign, timestamp, aircraft_type,
-               strftime('%H:%M', timestamp) as time_of_day
-        FROM positions
-        WHERE strftime('%H', timestamp) BETWEEN '00' AND '06'
-        ORDER BY strftime('%H:%M', timestamp) ASC
-        LIMIT 1
-    ''')
-    row = cursor.fetchone()
-    if row:
+    if stats and stats['earliest_catch_time']:
         records['earliest_catch'] = {
-            'icao': row['icao'], 'callsign': row['callsign'],
-            'timestamp': row['timestamp'], 'time': row['time_of_day'], 'type': row['aircraft_type']
+            'icao': stats['earliest_catch_icao'],
+            'callsign': stats['earliest_catch_callsign'],
+            'timestamp': stats['earliest_catch_timestamp'],
+            'time': stats['earliest_catch_time'],
+            'type': stats['earliest_catch_type']
         }
 
-    # Latest night catch
-    cursor.execute('''
-        SELECT icao, callsign, timestamp, aircraft_type,
-               strftime('%H:%M', timestamp) as time_of_day
-        FROM positions
-        WHERE strftime('%H', timestamp) >= '22'
-        ORDER BY strftime('%H:%M', timestamp) DESC
-        LIMIT 1
-    ''')
-    row = cursor.fetchone()
-    if row:
+    if stats and stats['latest_catch_time']:
         records['latest_catch'] = {
-            'icao': row['icao'], 'callsign': row['callsign'],
-            'timestamp': row['timestamp'], 'time': row['time_of_day'], 'type': row['aircraft_type']
+            'icao': stats['latest_catch_icao'],
+            'callsign': stats['latest_catch_callsign'],
+            'timestamp': stats['latest_catch_timestamp'],
+            'time': stats['latest_catch_time'],
+            'type': stats['latest_catch_type']
         }
 
     conn.close()
@@ -3499,6 +3944,14 @@ def calculate_achievements():
         max_streak = stats['max_streak'] or 0
         intl_carriers_str = stats['intl_carriers_seen'] or ''
         intl_carriers = len([c for c in intl_carriers_str.split(',') if c])
+        # Achievement category counts (pre-computed)
+        widebody_count = stats['widebody_count'] or 0
+        boeing_count = stats['boeing_count'] or 0
+        airbus_count = stats['airbus_count'] or 0
+        turboprop_count = stats['turboprop_count'] or 0
+        giant_count = stats['giant_count'] or 0
+        ems_heli_count = stats['ems_heli_count'] or 0
+        coastguard_count = stats['coastguard_count'] or 0
     else:
         # Fallback to direct queries if summary not populated
         cursor.execute('SELECT COUNT(DISTINCT icao) as count FROM positions')
@@ -3528,6 +3981,14 @@ def calculate_achievements():
         hours_covered = 0
         max_streak = 0
         intl_carriers = 0
+        # Achievement category defaults
+        widebody_count = 0
+        boeing_count = 0
+        airbus_count = 0
+        turboprop_count = 0
+        giant_count = 0
+        ems_heli_count = 0
+        coastguard_count = 0
 
     # --- Aircraft Count Achievements (Progressive tiers - designed for 3-12 months progression) ---
     add_achievement('first_thousand', 'First Thousand', '✈️', 'Log 1,000 unique aircraft', aircraft_count >= 1000, aircraft_count, 1000)
@@ -3613,45 +4074,24 @@ def calculate_achievements():
     has_full_house = major_carriers_seen >= 5
     add_achievement('full_house', 'Full House', '🃏', 'See all 5 major US carriers', has_full_house, major_carriers_seen, 5)
 
-    # --- Widebody Achievements (rare large aircraft) ---
-    cursor.execute('''
-        SELECT COUNT(DISTINCT icao) FROM positions
-        WHERE aircraft_type IN ('B744', 'B748', 'B772', 'B773', 'B77L', 'B77W', 'B788', 'B789', 'B78X',
-            'A332', 'A333', 'A338', 'A339', 'A342', 'A343', 'A345', 'A346', 'A359', 'A35K', 'A380', 'A388')
-    ''')
-    widebody_count = cursor.fetchone()[0]
+    # --- Widebody Achievements (from pre-computed count) ---
     add_achievement('widebody_spotter', 'Widebody Spotter', '🛫', 'Log 100 widebody aircraft (747, 777, 787, A330, A350, A380)', widebody_count >= 100, widebody_count, 100)
     add_achievement('widebody_fan', 'Widebody Fan', '🛬', 'Log 500 widebody aircraft', widebody_count >= 500, widebody_count, 500)
     add_achievement('widebody_expert', 'Widebody Expert', '✨', 'Log 2,000 widebody aircraft', widebody_count >= 2000, widebody_count, 2000)
 
-    # --- Manufacturer Diversity ---
-    cursor.execute("SELECT COUNT(DISTINCT icao) FROM positions WHERE aircraft_type LIKE 'B7%' OR aircraft_type LIKE 'B73%' OR aircraft_type LIKE 'B74%' OR aircraft_type LIKE 'B75%' OR aircraft_type LIKE 'B76%' OR aircraft_type LIKE 'B78%'")
-    boeing_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(DISTINCT icao) FROM positions WHERE aircraft_type LIKE 'A3%' OR aircraft_type LIKE 'A2%'")
-    airbus_count = cursor.fetchone()[0]
+    # --- Manufacturer Diversity (from pre-computed counts) ---
     add_achievement('boeing_buff', 'Boeing Buff', '🔵', 'Log 5,000 Boeing aircraft', boeing_count >= 5000, boeing_count, 5000)
     add_achievement('airbus_admirer', 'Airbus Admirer', '🔴', 'Log 5,000 Airbus aircraft', airbus_count >= 5000, airbus_count, 5000)
 
-    # --- Special Operations ---
-    # EMS helicopter types: EC135, EC145, AS350, Bell 407/429/412, AW109/139, S-76, MD500
-    cursor.execute("""SELECT COUNT(DISTINCT icao) FROM positions WHERE
-        aircraft_type IN ('EC35', 'EC45', 'AS50', 'AS55', 'B407', 'B429', 'B412', 'B206',
-            'A109', 'A139', 'A169', 'S76', 'MD52', 'MD50', 'BK17', 'H145', 'H135')""")
-    ems_heli_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(DISTINCT icao) FROM positions WHERE callsign LIKE 'COAST%' OR callsign LIKE 'USCG%' OR callsign LIKE 'CG%'")
-    coastguard_count = cursor.fetchone()[0]
+    # --- Special Operations (from pre-computed counts) ---
     add_achievement('lifesaver', 'EMS Spotter', '🚑', 'Log 25 EMS-type helicopters (EC135, EC145, Bell 407, etc.)', ems_heli_count >= 25, ems_heli_count, 25)
     add_achievement('coast_watcher', 'Coast Watcher', '⚓', 'Log 50 Coast Guard aircraft', coastguard_count >= 50, coastguard_count, 50)
 
-    # --- Rare Sightings ---
-    cursor.execute("SELECT COUNT(DISTINCT icao) FROM positions WHERE aircraft_type IN ('A380', 'A388', 'B748', 'AN124', 'AN225', 'C5', 'C5M', 'C17', 'B52')")
-    giant_count = cursor.fetchone()[0]
+    # --- Rare Sightings (from pre-computed count) ---
     add_achievement('giant_hunter', 'Giant Hunter', '🦣', 'Log 10 giant aircraft (A380, 747-8, C-5, C-17, An-124)', giant_count >= 10, giant_count, 10)
     add_achievement('giant_collector', 'Giant Collector', '🏛️', 'Log 100 giant aircraft', giant_count >= 100, giant_count, 100)
 
-    # --- Turboprop Achievements ---
-    cursor.execute("SELECT COUNT(DISTINCT icao) FROM positions WHERE aircraft_type LIKE 'DH8%' OR aircraft_type LIKE 'AT%' OR aircraft_type LIKE 'SF34' OR aircraft_type LIKE 'BE%' OR aircraft_type LIKE 'C208'")
-    turboprop_count = cursor.fetchone()[0]
+    # --- Turboprop Achievements (from pre-computed count) ---
     add_achievement('prop_head', 'Prop Head', '🌀', 'Log 500 turboprop aircraft', turboprop_count >= 500, turboprop_count, 500)
     add_achievement('prop_master', 'Prop Master', '💫', 'Log 2,000 turboprop aircraft', turboprop_count >= 2000, turboprop_count, 2000)
 
@@ -3677,71 +4117,35 @@ def calculate_achievements():
     add_achievement('emergency_5', 'Emergency Expert', '🆘', 'Log 5 emergency squawk aircraft', emergency_count >= 5, emergency_count, 5)
     add_achievement('emergency_10', 'Emergency Veteran', '🚑', 'Log 10 emergency squawk aircraft', emergency_count >= 10, emergency_count, 10)
     
-    # --- Bizjet/Private Achievement (harder to track) ---
-    cursor.execute('''
-        SELECT COUNT(DISTINCT icao) as count FROM positions 
-        WHERE aircraft_type IN ('C525', 'C560', 'C680', 'C750', 'CL30', 'CL35', 'CL60', 
-            'GLF4', 'GLF5', 'GLF6', 'GLEX', 'G150', 'G200', 'G280', 'GA5C', 'GA6C',
-            'F900', 'F2TH', 'FA50', 'FA7X', 'FA8X', 'E135', 'E145', 'E35L', 'E50P', 
-            'E55P', 'E550', 'BE40', 'PRM1', 'PC12', 'PC24', 'LJ35', 'LJ45', 'LJ60')
-    ''')
-    bizjet_count = cursor.fetchone()['count']
-    # Bizjet achievements (~1800/month near hub)
+    # --- Bizjet/Private Achievement (TODO: pre-compute in v1.3.2) ---
+    # Bizjet and regional achievements temporarily disabled - queries too slow on large databases
+    # These will be re-enabled with pre-computed counts in a future update
+    bizjet_count = 0  # Placeholder - will pre-compute later
     add_achievement('bizjet_spotter', 'Bizjet Spotter', '💼', 'Log 5,000 business jets', bizjet_count >= 5000, bizjet_count, 5000)
     add_achievement('bizjet_expert', 'Bizjet Expert', '🤵', 'Log 15,000 business jets', bizjet_count >= 15000, bizjet_count, 15000)
     add_achievement('bizjet_master', 'High Roller', '💰', 'Log 50,000 business jets', bizjet_count >= 50000, bizjet_count, 50000)
 
-    # --- Regional Jet Achievements ---
-    # CRJ series, Embraer E-Jets, ATR turboprops
-    cursor.execute('''
-        SELECT COUNT(DISTINCT icao) as count FROM positions
-        WHERE aircraft_type LIKE 'CRJ%'
-           OR aircraft_type LIKE 'E170' OR aircraft_type LIKE 'E175'
-           OR aircraft_type LIKE 'E190' OR aircraft_type LIKE 'E195'
-           OR aircraft_type LIKE 'E75%' OR aircraft_type LIKE 'E70%'
-           OR aircraft_type LIKE 'ATR%'
-           OR aircraft_type LIKE 'DH8%'
-           OR aircraft_type LIKE 'SF34'
-    ''')
-    regional_count = cursor.fetchone()['count']
-    # Regional achievements - EXTREME mode (rebalanced v1.3.0 - 10x harder)
+    # --- Regional Jet Achievements (TODO: pre-compute in v1.3.2) ---
+    regional_count = 0  # Placeholder - will pre-compute later
     add_achievement('regional_spotter', 'Regional Spotter', '🛫', 'Log 5,000 regional aircraft', regional_count >= 5000, regional_count, 5000)
     add_achievement('regional_expert', 'Regional Expert', '🛬', 'Log 25,000 regional aircraft', regional_count >= 25000, regional_count, 25000)
     add_achievement('regional_master', 'Regional Master', '🏛️', 'Log 100,000 regional aircraft', regional_count >= 100000, regional_count, 100000)
 
-    # --- Altitude Achievements (realistic) ---
-    cursor.execute('SELECT MAX(altitude) as max_alt FROM positions')
-    result = cursor.fetchone()['max_alt']
-    try:
-        max_alt = int(float(result)) if result else 0
-    except (ValueError, TypeError):
-        max_alt = 0
-    
+    # --- Altitude Achievements (use pre-computed max from stats_summary) ---
+    max_alt = stats['max_altitude'] or 0 if stats else 0
     add_achievement('high_flyer', 'High Flyer', '✈️', 'Log aircraft above FL400', max_alt >= 40000, max_alt, 40000)
     add_achievement('jet_stream', 'Jet Stream', '💨', 'Log aircraft above FL450', max_alt >= 45000, max_alt, 45000)
     add_achievement('stratosphere', 'Stratosphere', '🚀', 'Log aircraft above FL500', max_alt >= 50000, max_alt, 50000)
     add_achievement('edge_of_space', 'Edge of Space', '🛸', 'Log aircraft above FL550 (military/special)', max_alt >= 55000, max_alt, 55000)
-    
-    # --- Speed Achievement ---
-    cursor.execute('SELECT MAX(speed) as max_speed FROM positions')
-    result = cursor.fetchone()['max_speed']
-    try:
-        max_speed = int(float(result)) if result else 0
-    except (ValueError, TypeError):
-        max_speed = 0
-    # Speed achievements - HARD mode (rebalanced v1.3.0, starts at 600kt)
+
+    # --- Speed Achievement (use pre-computed max from stats_summary) ---
+    max_speed = stats['max_speed'] or 0 if stats else 0
     add_achievement('speed_demon', 'Speed Demon', '⚡', 'Log aircraft above 600 knots', max_speed >= 600, max_speed, 600)
     add_achievement('supersonic', 'Near Supersonic', '💨', 'Log aircraft above 700 knots', max_speed >= 700, max_speed, 700)
     add_achievement('mach_buster', 'Mach Buster', '🔊', 'Log aircraft above 800 knots', max_speed >= 800, max_speed, 800)
     
-    # --- Special Daily Achievements (much harder) ---
-    cursor.execute('''
-        SELECT MAX(cnt) as max_count FROM (
-            SELECT COUNT(DISTINCT icao) as cnt FROM positions GROUP BY date(timestamp)
-        )
-    ''')
-    result = cursor.fetchone()['max_count']
-    busiest_day_count = int(result) if result else 0
+    # --- Special Daily Achievements (use pre-computed busiest_day_count from stats_summary) ---
+    busiest_day_count = stats['busiest_day_count'] or 0 if stats else 0
     # Daily achievements - EXTREME mode (rebalanced v1.3.0 - 5x harder)
     add_achievement('busy_day', 'Busy Day', '🔥', 'Log 10,000+ aircraft in one day', busiest_day_count >= 10000, busiest_day_count, 10000)
     add_achievement('crazy_day', 'Crazy Day', '🌪️', 'Log 25,000+ aircraft in one day', busiest_day_count >= 25000, busiest_day_count, 25000)
