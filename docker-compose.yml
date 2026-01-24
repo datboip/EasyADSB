@@ -79,9 +79,10 @@ services:
       - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-14}
     volumes:
       - /opt/adsb/flightlogs:/data
+      - ./VERSION:/app/VERSION:ro
     depends_on:
       - ultrafeeder
-      
+
   radarbox:
     image: ghcr.io/sdr-enthusiasts/docker-radarbox:latest
     container_name: radarbox
