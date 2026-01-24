@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Version display**: Footer and update checker now pull version dynamically from logger API instead of hardcoded values
 - **Aircraft rotation**: Added `calc_track` fallback for heading when `track` is unavailable
 - **Regional/Bizjet achievements**: Were hardcoded to 0 progress, now properly count aircraft types
+- **Feed status stuck on "Checking..."**: Removed stray code causing all feed status badges to show offline
 
 ### Database Changes
 
