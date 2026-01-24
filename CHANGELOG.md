@@ -5,6 +5,41 @@ All notable changes to EasyADSB will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-01-24
+
+### Added
+
+- **Aircraft Trails**: Always-on trail tracking with altitude-colored segments
+  - Trails persist in background regardless of toggle state
+  - Altitude-based color gradient (green=low → red=high)
+  - Dashed lines for missing/uncertain altitude data
+  - Gap detection skips teleportation artifacts (>50km jumps)
+  - Isolate button (🎯) to focus on single aircraft trail
+
+- **Heatmap Visualization**: Position density overlay showing where aircraft are most frequently seen
+  - Toggle button in map controls
+  - Days selector (24h, 7d, 14d, 30d)
+  - Color legend (blue=low → red=high density)
+
+- **Regional & Bizjet Achievements**: Now properly tracked with pre-computed counts
+  - Regional Spotter/Expert/Master (CRJ, ERJ, E-Jets, ATR, Dash 8, etc.)
+  - Bizjet Spotter/Expert/High Roller (Gulfstream, Citation, Falcon, Learjet, etc.)
+  - Automatic migration populates historical data on upgrade
+
+### Fixed
+
+- **Version display**: Footer and update checker now pull version dynamically from logger API instead of hardcoded values
+- **Aircraft rotation**: Added `calc_track` fallback for heading when `track` is unavailable
+- **Regional/Bizjet achievements**: Were hardcoded to 0 progress, now properly count aircraft types
+
+### Database Changes
+
+- Added `is_regional` and `is_bizjet` columns to `aircraft_summary` table
+- Added `regional_count` and `bizjet_count` to `stats_summary` table
+- Automatic migration on upgrade from v1.3.1/v1.3.2
+
+---
+
 ## [1.3.2] - 2026-01-13
 
 ### Documentation
