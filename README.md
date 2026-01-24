@@ -63,6 +63,17 @@ EasyADSB is an **all-in-one automated setup script** that turns your Raspberry P
 - **Smart Recommendations** - Tailored poll intervals based on your hardware
 - **System Monitoring** - CPU temp, memory, disk usage, uptime
 
+### New in v1.3.3
+- **Aircraft Trails** - Always-on trail tracking with altitude-colored segments, dashed lines for missing data, isolate button
+- **Map Heatmap** - Position density overlay showing where aircraft are most frequently seen (24h/7d/14d/30d)
+- **Regional/Bizjet Achievements** - Fixed! Now properly track CRJ, ERJ, E-Jets, Gulfstream, Citation, Falcon, Learjet, etc.
+- **Dynamic Version** - Footer and update checker now pull version from API instead of hardcoded values
+- **Aircraft Rotation Fix** - Uses calc_track fallback when track heading unavailable
+
+### New in v1.3.2
+- **Complete API Reference** - README now documents all 27 logger API endpoints with examples
+- **VERSION File Fix** - Corrected VERSION file that was stuck at 1.3.0
+
 ### New in v1.3.1
 - **Backup Service** - One-click backup from dashboard (config-only or full with flight data)
 - **New Personal Records** - Lowest altitude, slowest aircraft, earliest/latest catches
