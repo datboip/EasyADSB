@@ -32,7 +32,7 @@ EasyADSB is an **all-in-one automated setup script** that turns your Raspberry P
 - ✅ **Easy Updates** - Pull latest from GitHub with one menu option
 - ✅ **Clean Uninstall** - Remove everything when needed
 
-### Dashboard (v1.3.1)
+### Dashboard
 - **Custom Interactive Map** - Native Leaflet map with SVG aircraft icons
   - Altitude-based coloring (green → yellow → orange → red → purple)
   - Real-time heading rotation
@@ -51,14 +51,14 @@ EasyADSB is an **all-in-one automated setup script** that turns your Raspberry P
 - **Export** - Download as CSV or JSON anytime
 - **REST API** - Query flights, traces, statistics programmatically
 
-### Achievements & Stats (v1.3.0)
+### Achievements & Stats
 - **74+ Achievements** - 8 categories (altitude, speed, types, streaks, etc.)
 - **Leaderboard** - Top aircraft by sightings with time-range filters (24h/7d/30d/all)
 - **Personal Records** - Busiest day, max altitude, top speed, best signal
 - **Aircraft Type Gallery** - Categorized display of logged aircraft types
 - **Activity Heatmap** - Traffic patterns by day/hour with daily totals
 
-### Hardware-Aware (v1.3.0)
+### Hardware-Aware
 - **Auto-Detection** - Identifies Pi 3/4/5, Zero, Zero 2 W
 - **Smart Recommendations** - Tailored poll intervals based on your hardware
 - **System Monitoring** - CPU temp, memory, disk usage, uptime
@@ -191,7 +191,7 @@ hostname -I
 
 ## 🎛️ Dashboard Features
 
-### Interactive Map (v1.3.0)
+### Interactive Map
 - **Custom Leaflet Map** - Native SVG aircraft icons with altitude coloring
 - **6 Map Styles** - Dark, Light, Voyager, Satellite, Terrain, OpenStreetMap
 - **Real-time Updates** - Aircraft positions, headings, and trails
@@ -205,7 +205,7 @@ hostname -I
 - **Messages/Second** - Data throughput from your receiver
 - **Max Range** - Furthest aircraft detected
 
-### Feed Status (v1.3.0)
+### Feed Status
 - **Broadcasting Status** - Live indicators for all 6 services
 - **Collapsible Cards** - Click to expand/collapse each section
 - **Direct Links** - One-click access to your stats on each platform
@@ -227,7 +227,7 @@ hostname -I
 ![Dashboard Light Mode](screenshots/dashboard-light.png)
 *Light mode - perfect for daytime viewing*
 
-### Collapsible Sections (v1.3.0)
+### Collapsible Sections
 Every section can be collapsed for a cleaner, more compact view. Your preferences are saved automatically.
 
 ![All Sections Collapsed](screenshots/dashboard-all-collapsed.png)
@@ -359,7 +359,7 @@ The logger provides a comprehensive REST API at `http://<your-pi>:8082`. All end
 
 ---
 
-## 🏆 Achievements & Stats (v1.3.0)
+## 🏆 Achievements & Stats
 
 Track your spotting progress with gamified achievements and detailed statistics!
 
@@ -859,7 +859,7 @@ Check your stats regularly:
 
 ### Backup Your Config
 
-**From Dashboard (v1.3.1):**
+**From Dashboard:**
 
 Click **Create Backup** in the Settings section to open the backup modal:
 - **Config Only** - Just `.env` and `dashboard-config.js` (~1 KB)
