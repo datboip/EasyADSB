@@ -3170,7 +3170,6 @@
                     if (userConfig.adsbxShortID) config.adsbxShortID = userConfig.adsbxShortID;
                     console.log('Loaded user config from server:', userConfig);
                 }
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 console.log('Could not load user config from server, using localStorage');
             }
@@ -3189,7 +3188,6 @@
                     console.log(`Saved ${key} to server`);
                     return true;
                 }
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 console.log('Could not save to server, saving to localStorage only');
             }
@@ -3635,7 +3633,6 @@
                             <span class="mini-stat-label">📏 ${rangeU} Range</span>
                         </div>`;
                 }
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 console.log('Could not fetch stats:', e);
                 updateFeedStatus('offline');
@@ -4316,7 +4313,6 @@
                     if (Date.now() - cachedData.timestamp < 60000) {
                         renderLeaderboard(cachedData.data);
                     }
-                btn.textContent = 'Heatmap';
             } catch (e) {}
             }
             
@@ -4559,7 +4555,6 @@
 
                 body.innerHTML = statsHtml + aircraftHtml + sightingsHtml + linksHtml;
 
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 body.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Failed to load callsign data</div>';
             }
@@ -4870,7 +4865,6 @@
                         </div>
                     `;
                 }
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 container.innerHTML = `
                     <div style="width: 200px; height: 120px; background: var(--bg-color); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0 auto; border: 1px dashed var(--text-secondary); opacity: 0.5;">
@@ -5010,7 +5004,6 @@
                     const imgUrl = photo.thumbnail?.src || photo.thumbnail_large?.src;
                     container.innerHTML = `<img src="${imgUrl}" class="float-panel-photo" onerror="this.style.display='none'">`;
                 }
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 // Photo not available
             }
@@ -6394,7 +6387,6 @@
                 document.getElementById('system-stats-disabled').style.display = 'none';
                 document.getElementById('system-stats-content').style.display = 'block';
                 await loadSystemStats();
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 // If it fails, show disabled state
                 document.getElementById('system-stats-disabled').style.display = 'block';
@@ -6645,7 +6637,6 @@
                         select.value = data.interval.toString();
                     }
                 }
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 // Logger not available
             }
@@ -7199,7 +7190,6 @@
                         fetchRangeOutline();
                     }
                 }
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 console.log('Could not fetch receiver location:', e);
             }
@@ -7282,7 +7272,6 @@
                     // Tooltip on hover
                     rangePolygon.bindTooltip('24h Reception Range', { sticky: true });
                 }
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 console.log('Could not fetch range outline:', e);
             }
@@ -7428,7 +7417,6 @@
                 // Update floating panel with live data
                 updateFloatPanel(aircraft);
 
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 console.log('Map update error:', e);
             }
@@ -7523,7 +7511,6 @@
                     return latestFlight.map(p => [p.lat, p.lon, p.alt || 0]);
                 }
                 return null;
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 return null;
             }
@@ -7684,7 +7671,6 @@
                         }
                     }).addTo(liveMap);
                 }
-            btn.textContent = 'Heatmap';
             } catch (e) {
                 console.error('Heatmap error:', e);
                 document.getElementById('btn-heatmap').textContent = 'Heatmap';
