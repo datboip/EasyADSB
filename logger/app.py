@@ -329,6 +329,8 @@ def init_db():
         ('giant_count', 'INTEGER DEFAULT 0'),
         ('ems_heli_count', 'INTEGER DEFAULT 0'),
         ('coastguard_count', 'INTEGER DEFAULT 0'),
+        ('regional_count', 'INTEGER DEFAULT 0'),
+        ('bizjet_count', 'INTEGER DEFAULT 0'),
         # Additional records fields (v1.3.1)
         ('lowest_altitude_callsign', 'TEXT'),
         ('lowest_altitude_type', 'TEXT'),
@@ -362,6 +364,8 @@ def init_db():
         ('is_giant', 'INTEGER DEFAULT 0'),
         ('is_ems_heli', 'INTEGER DEFAULT 0'),
         ('is_coastguard', 'INTEGER DEFAULT 0'),
+        ('is_regional', 'INTEGER DEFAULT 0'),
+        ('is_bizjet', 'INTEGER DEFAULT 0'),
     ]
     for col_name, col_type in aircraft_new_columns:
         try:
@@ -394,6 +398,8 @@ def init_db():
         giant_total = 0
         ems_total = 0
         coastguard_total = 0
+        regional_total = 0
+        bizjet_total = 0
 
         for icao, atype, callsigns in rows:
             # Import helper functions here - they're defined later in the file
@@ -436,12 +442,38 @@ def init_db():
                         is_cg = 1
                         break
 
+
+            # Regional check (CRJ, ERJ, E-Jets, ATR, Dash 8, SAAB, Fokker)
+            is_reg = 0
+            if atype_upper:
+                if (atype_upper.startswith('E1') or atype_upper.startswith('E7') or atype_upper.startswith('E29') or
+                    atype_upper in ['E135', 'E145', 'E35L'] or atype_upper.startswith('CRJ') or
+                    atype_upper.startswith('AT4') or atype_upper.startswith('AT7') or
+                    atype_upper.startswith('DH8') or atype_upper.startswith('DHC8') or atype_upper == 'D8' or
+                    atype_upper in ['SF34', 'SB20', 'S340', 'F50', 'F70', 'F100']):
+                    is_reg = 1
+
+            # Bizjet check (Gulfstream, Citation, Falcon, Learjet, Challenger, etc)
+            is_biz = 0
+            if atype_upper:
+                if (atype_upper.startswith('GLF') or atype_upper.startswith('G1') or atype_upper.startswith('G2') or
+                    atype_upper.startswith('G3') or atype_upper.startswith('G4') or atype_upper.startswith('G5') or
+                    atype_upper.startswith('G6') or atype_upper.startswith('GA5') or atype_upper.startswith('GA6') or
+                    atype_upper == 'GLEX' or atype_upper.startswith('CL3') or atype_upper.startswith('CL6') or
+                    atype_upper.startswith('GL5') or atype_upper.startswith('GL7') or atype_upper.startswith('LJ') or
+                    atype_upper.startswith('FA') or atype_upper.startswith('F9') or atype_upper == 'F2TH' or
+                    atype_upper.startswith('H25') or atype_upper.startswith('HA4') or
+                    atype_upper in ['BE40', 'BE4W', 'PRM1', 'E50P', 'E55P', 'E545', 'E550', 'PC24']):
+                    is_biz = 1
+                # Citation check (C25x, C5xx, C6xx, C7xx)
+                if atype_upper.startswith('C25') or atype_upper.startswith('C50') or atype_upper.startswith('C51') or                    atype_upper.startswith('C52') or atype_upper.startswith('C55') or atype_upper.startswith('C56') or                    atype_upper.startswith('C65') or atype_upper.startswith('C68') or atype_upper.startswith('C70'):
+                    is_biz = 1
             cursor.execute('''
                 UPDATE aircraft_summary
                 SET is_widebody = ?, is_boeing = ?, is_airbus = ?, is_turboprop = ?,
-                    is_giant = ?, is_ems_heli = ?, is_coastguard = ?
+                    is_giant = ?, is_ems_heli = ?, is_coastguard = ?, is_regional = ?, is_bizjet = ?
                 WHERE icao = ?
-            ''', (is_wb, is_boe, is_air, is_turbo, is_gi, is_ems, is_cg, icao))
+            ''', (is_wb, is_boe, is_air, is_turbo, is_gi, is_ems, is_cg, is_reg, is_biz, icao))
 
             widebody_total += is_wb
             boeing_total += is_boe
@@ -450,6 +482,8 @@ def init_db():
             giant_total += is_gi
             ems_total += is_ems
             coastguard_total += is_cg
+            regional_total += is_reg
+            bizjet_total += is_biz
 
         # Update stats_summary with the totals
         cursor.execute('''
@@ -460,14 +494,66 @@ def init_db():
                 turboprop_count = ?,
                 giant_count = ?,
                 ems_heli_count = ?,
-                coastguard_count = ?
+                coastguard_count = ?,
+                regional_count = ?,
+                bizjet_count = ?
             WHERE id = 1
         ''', (widebody_total, boeing_total, airbus_total, turboprop_total,
-              giant_total, ems_total, coastguard_total))
+              giant_total, ems_total, coastguard_total, regional_total, bizjet_total))
 
         log.info(f"Migration complete: {widebody_total} widebody, {boeing_total} Boeing, "
                  f"{airbus_total} Airbus, {turboprop_total} turboprop, {giant_total} giant, "
-                 f"{ems_total} EMS, {coastguard_total} coastguard")
+                 f"{ems_total} EMS, {coastguard_total} coastguard, {regional_total} regional, {bizjet_total} bizjet")
+
+    # Check if regional/bizjet migration needed (v1.3.3 migration)
+    # If regional_count is 0 but widebody_count > 0, need to migrate
+    cursor.execute('SELECT regional_count, widebody_count FROM stats_summary WHERE id = 1')
+    row = cursor.fetchone()
+    if row and row['widebody_count'] > 0 and (row['regional_count'] is None or row['regional_count'] == 0):
+        log.info("Migrating regional/bizjet flags for existing aircraft...")
+        cursor.execute('SELECT icao, aircraft_type FROM aircraft_summary')
+        rows = cursor.fetchall()
+
+        regional_total = 0
+        bizjet_total = 0
+
+        for icao, atype in rows:
+            atype_upper = (atype or '').upper()
+
+            # Regional check
+            is_reg = 0
+            if atype_upper:
+                if (atype_upper.startswith('E1') or atype_upper.startswith('E7') or atype_upper.startswith('E29') or
+                    atype_upper in ['E135', 'E145', 'E35L'] or atype_upper.startswith('CRJ') or
+                    atype_upper.startswith('AT4') or atype_upper.startswith('AT7') or
+                    atype_upper.startswith('DH8') or atype_upper.startswith('DHC8') or atype_upper == 'D8' or
+                    atype_upper in ['SF34', 'SB20', 'S340', 'F50', 'F70', 'F100']):
+                    is_reg = 1
+
+            # Bizjet check
+            is_biz = 0
+            if atype_upper:
+                if (atype_upper.startswith('GLF') or atype_upper.startswith('G1') or atype_upper.startswith('G2') or
+                    atype_upper.startswith('G3') or atype_upper.startswith('G4') or atype_upper.startswith('G5') or
+                    atype_upper.startswith('G6') or atype_upper.startswith('GA5') or atype_upper.startswith('GA6') or
+                    atype_upper == 'GLEX' or atype_upper.startswith('CL3') or atype_upper.startswith('CL6') or
+                    atype_upper.startswith('GL5') or atype_upper.startswith('GL7') or atype_upper.startswith('LJ') or
+                    atype_upper.startswith('FA') or atype_upper.startswith('F9') or atype_upper == 'F2TH' or
+                    atype_upper.startswith('H25') or atype_upper.startswith('HA4') or
+                    atype_upper in ['BE40', 'BE4W', 'PRM1', 'E50P', 'E55P', 'E545', 'E550', 'PC24']):
+                    is_biz = 1
+                # Citation check
+                if atype_upper.startswith('C25') or atype_upper.startswith('C50') or atype_upper.startswith('C51') or                    atype_upper.startswith('C52') or atype_upper.startswith('C55') or atype_upper.startswith('C56') or                    atype_upper.startswith('C65') or atype_upper.startswith('C68') or atype_upper.startswith('C70'):
+                    is_biz = 1
+
+            cursor.execute('UPDATE aircraft_summary SET is_regional = ?, is_bizjet = ? WHERE icao = ?',
+                          (is_reg, is_biz, icao))
+            regional_total += is_reg
+            bizjet_total += is_biz
+
+        cursor.execute('UPDATE stats_summary SET regional_count = ?, bizjet_count = ? WHERE id = 1',
+                      (regional_total, bizjet_total))
+        log.info(f"Regional/bizjet migration complete: {regional_total} regional, {bizjet_total} bizjet")
 
     # Check if new record fields need to be populated (v1.3.1 migration)
     # These are NULL if upgrading from 1.3.0
@@ -706,6 +792,67 @@ def is_commercial_aircraft(callsign):
     return prefix in commercial_prefixes
 
 
+
+def is_regional_aircraft(aircraft_type):
+    """Check if aircraft is a regional jet/turboprop (CRJ, ERJ, E-Jets, ATR, Dash 8, etc)."""
+    if not aircraft_type:
+        return False
+    t = aircraft_type.upper()
+    # Embraer E-Jets and ERJ
+    if t.startswith('E1') or t.startswith('E7') or t.startswith('E29'):  # E170, E175, E190, E195, E75S, E75L, E290, E295
+        return True
+    if t in ['E135', 'E145', 'E35L']:  # ERJ-135, ERJ-145
+        return True
+    # Bombardier CRJ
+    if t.startswith('CRJ'):  # CRJ1, CRJ2, CRJ7, CRJ9, CRJX
+        return True
+    # ATR turboprops
+    if t.startswith('AT4') or t.startswith('AT7'):  # AT43, AT45, AT72, AT75, AT76
+        return True
+    # De Havilland Dash 8
+    if t.startswith('DH8') or t.startswith('DHC8') or t == 'D8':
+        return True
+    # SAAB
+    if t in ['SF34', 'SB20', 'S340']:
+        return True
+    # Fokker
+    if t in ['F50', 'F70', 'F100']:
+        return True
+    return False
+
+
+def is_bizjet_aircraft(aircraft_type):
+    """Check if aircraft is a business jet (Gulfstream, Citation, Falcon, Learjet, etc)."""
+    if not aircraft_type:
+        return False
+    t = aircraft_type.upper()
+    # Gulfstream
+    if t.startswith('GLF') or t.startswith('G1') or t.startswith('G2') or t.startswith('G3') or t.startswith('G4') or t.startswith('G5') or t.startswith('G6') or t.startswith('GA5') or t.startswith('GA6') or t == 'GLEX':
+        return True
+    # Bombardier Challenger/Global
+    if t.startswith('CL3') or t.startswith('CL6') or t.startswith('GL5') or t.startswith('GL7') or t == 'GLEX':
+        return True
+    # Cessna Citation
+    if t.startswith('C25') or t.startswith('C5') or t.startswith('C6') or t.startswith('C7'):
+        if t.startswith('C56') or t.startswith('C52') or t.startswith('C55') or t.startswith('C68') or t.startswith('C70') or t.startswith('C50') or t.startswith('C51') or t.startswith('C65') or t.startswith('C25'):
+            return True
+    # Dassault Falcon
+    if t.startswith('FA') or t.startswith('F9') or t == 'F2TH':
+        return True
+    # Learjet
+    if t.startswith('LJ'):
+        return True
+    # Hawker/Beechcraft
+    if t.startswith('H25') or t.startswith('HA4') or t == 'BE40' or t == 'BE4W' or t == 'PRM1':
+        return True
+    # Embraer bizjets
+    if t in ['E50P', 'E55P', 'E545', 'E550', 'E35L']:
+        return True
+    # Pilatus PC-24
+    if t == 'PC24':
+        return True
+    return False
+
 def get_airline_code(callsign):
     """Get airline code from callsign (DAL, UAL, AAL, SWA, JBU) or None."""
     if not callsign:
@@ -808,13 +955,15 @@ def backfill_summary_tables():
         is_giant = 1 if is_giant_aircraft(aircraft_type) else 0
         is_ems = 1 if is_ems_helicopter(aircraft_type) else 0
         is_cg = 1 if is_coastguard_aircraft(callsign) else 0
+        is_reg = 1 if is_regional_aircraft(aircraft_type) else 0
+        is_biz = 1 if is_bizjet_aircraft(aircraft_type) else 0
 
         cursor.execute('''
             UPDATE aircraft_summary
             SET is_military = ?, is_helicopter = ?, is_cargo = ?, is_commercial = ?, airline = ?,
-                is_widebody = ?, is_boeing = ?, is_airbus = ?, is_turboprop = ?, is_giant = ?, is_ems_heli = ?, is_coastguard = ?
+                is_widebody = ?, is_boeing = ?, is_airbus = ?, is_turboprop = ?, is_giant = ?, is_ems_heli = ?, is_coastguard = ?, is_regional = ?, is_bizjet = ?
             WHERE icao = ?
-        ''', (is_mil, is_heli, is_cargo_flag, is_comm, airline, is_wb, is_boeing, is_airbus, is_turbo, is_giant, is_ems, is_cg, icao))
+        ''', (is_mil, is_heli, is_cargo_flag, is_comm, airline, is_wb, is_boeing, is_airbus, is_turbo, is_giant, is_ems, is_cg, is_reg, is_biz, icao))
 
     conn.commit()
 
@@ -1296,17 +1445,19 @@ def update_summary_tables_incremental(aircraft_data, timestamp):
             is_giant = 1 if is_giant_aircraft(aircraft_type) else 0
             is_ems = 1 if is_ems_helicopter(aircraft_type) else 0
             is_cg = 1 if is_coastguard_aircraft(callsign) else 0
+            is_reg = 1 if is_regional_aircraft(aircraft_type) else 0
+            is_biz = 1 if is_bizjet_aircraft(aircraft_type) else 0
 
             cursor.execute('''
                 INSERT INTO aircraft_summary (
                     icao, position_count, session_count, days_seen, first_seen, last_seen,
                     last_session_key, aircraft_type, callsigns, max_altitude, max_speed,
                     is_military, is_helicopter, is_cargo, is_commercial, airline,
-                    is_widebody, is_boeing, is_airbus, is_turboprop, is_giant, is_ems_heli, is_coastguard
-                ) VALUES (?, 1, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    is_widebody, is_boeing, is_airbus, is_turboprop, is_giant, is_ems_heli, is_coastguard, is_regional, is_bizjet
+                ) VALUES (?, 1, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (icao, timestamp, timestamp, ac_session_key, aircraft_type,
                   callsign or '', altitude, speed, is_mil, is_heli, is_cargo_flag, is_comm, airline,
-                  is_wb, is_boeing, is_airbus, is_turbo, is_giant, is_ems, is_cg))
+                  is_wb, is_boeing, is_airbus, is_turbo, is_giant, is_ems, is_cg, is_reg, is_biz))
 
             # Update category counts in stats_summary for new aircraft
             if is_mil:
@@ -1329,6 +1480,10 @@ def update_summary_tables_incremental(aircraft_data, timestamp):
                 cursor.execute('UPDATE stats_summary SET ems_heli_count = ems_heli_count + 1 WHERE id = 1')
             if is_cg:
                 cursor.execute('UPDATE stats_summary SET coastguard_count = coastguard_count + 1 WHERE id = 1')
+            if is_reg:
+                cursor.execute('UPDATE stats_summary SET regional_count = regional_count + 1 WHERE id = 1')
+            if is_biz:
+                cursor.execute('UPDATE stats_summary SET bizjet_count = bizjet_count + 1 WHERE id = 1')
 
         # ─────────────────────────────────────────────────────────────────────
         # Update type_summary
@@ -2191,8 +2346,11 @@ def get_aircraft_category(callsigns, aircraft_type, icao):
 
 def calculate_leaderboard_for_range(range_param):
     """Calculate leaderboard for a specific time range."""
-    now = datetime.now()
-    if range_param == '24h':
+    now = datetime.utcnow()
+    if range_param.endswith('m'):
+        minutes = int(range_param[:-1])
+        cutoff = now - timedelta(minutes=minutes)
+    elif range_param == '24h':
         cutoff = now - timedelta(hours=24)
     elif range_param == '7d':
         cutoff = now - timedelta(days=7)
@@ -2614,8 +2772,11 @@ def api_aircraft_trace_all(icao):
     range_param = request.args.get('range', '7d')
     
     # Calculate cutoff time
-    now = datetime.now()
-    if range_param == '24h':
+    now = datetime.utcnow()
+    if range_param.endswith('m'):
+        minutes = int(range_param[:-1])
+        cutoff = now - timedelta(minutes=minutes)
+    elif range_param == '24h':
         cutoff = now - timedelta(hours=24)
     elif range_param == '7d':
         cutoff = now - timedelta(days=7)
@@ -2635,7 +2796,7 @@ def api_aircraft_trace_all(icao):
             FROM positions
             WHERE UPPER(icao) = ? AND timestamp >= ? AND lat IS NOT NULL
             ORDER BY timestamp
-        ''', (icao, cutoff.isoformat()))
+        ''', (icao, cutoff.strftime('%Y-%m-%d %H:%M:%S')))
     else:
         cursor.execute('''
             SELECT timestamp, lat, lon, altitude, speed, track, callsign
@@ -2974,14 +3135,76 @@ def api_stats_records():
     return jsonify(response)
 
 
-# NOTE: calculate_heatmap() removed in v1.3.0 - was taking ~130s per calculation
-# Activity Heatmap feature removed from frontend to improve performance
-
-
+# Heatmap endpoint restored in v1.3.3 with optimized grid-based aggregation
 @app.route('/api/stats/heatmap')
 def api_stats_heatmap():
-    """Heatmap removed in v1.3.0 - returns 410 Gone."""
-    return jsonify({'error': 'Heatmap feature removed in v1.3.0'}), 410
+    """
+    Return position density data for heatmap visualization.
+    Uses grid-based aggregation for performance.
+
+    Query params:
+        - days: 1-30 (default: 7)
+        - resolution: grid size in degrees (default: 0.005, about 500m)
+        - type: all, helicopter, military (optional filter)
+
+    Returns raw counts - frontend should set Leaflet.heat max based on max_count
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    days = min(30, max(1, int(request.args.get('days', 7))))
+    resolution = float(request.args.get('resolution', 0.005))  # ~500m grid
+    type_filter = request.args.get('type', 'all')
+
+    # Build query based on filter type
+    # Using ROUND to bin positions into grid cells
+    base_query = '''
+        SELECT
+            ROUND(lat / ?) * ? as grid_lat,
+            ROUND(lon / ?) * ? as grid_lon,
+            COUNT(*) as count
+        FROM positions
+        WHERE timestamp >= datetime('now', '-' || ? || ' days')
+          AND lat IS NOT NULL AND lon IS NOT NULL
+    '''
+    params = [resolution, resolution, resolution, resolution, days]
+
+    # Add type filter if specified
+    if type_filter == 'helicopter':
+        base_query += '''
+          AND icao IN (SELECT icao FROM aircraft_summary WHERE is_helicopter = 1)
+        '''
+    elif type_filter == 'military':
+        base_query += '''
+          AND icao IN (SELECT icao FROM aircraft_summary WHERE is_military = 1)
+        '''
+
+    base_query += '''
+        GROUP BY grid_lat, grid_lon
+        HAVING count > 1
+    '''
+
+    cursor.execute(base_query, params)
+    rows = cursor.fetchall()
+
+    # Build points array and find max for scaling info
+    points = []
+    max_count = 0
+    for row in rows:
+        count = row['count']
+        if count > max_count:
+            max_count = count
+        # Return as [lat, lon, count] - frontend will handle intensity scaling
+        points.append([row['grid_lat'], row['grid_lon'], count])
+
+    return jsonify({
+        'points': points,
+        'count': len(points),
+        'max_count': max_count,
+        'days': days,
+        'resolution': resolution,
+        'type': type_filter
+    })
 
 
 @app.route('/api/stats/timeline')
@@ -3575,6 +3798,18 @@ def api_system_stats():
     else:
         stats['storage_warning'] = False
     
+    # Version from VERSION file
+    try:
+        import os
+        version_path = os.path.join(os.path.dirname(__file__), "VERSION")
+        if os.path.exists(version_path):
+            with open(version_path, "r") as f:
+                stats["version"] = f.read().strip()
+        else:
+            stats["version"] = "unknown"
+    except:
+        stats["version"] = "unknown"
+    
     return jsonify(stats)
 
 
@@ -4117,16 +4352,16 @@ def calculate_achievements():
     add_achievement('emergency_5', 'Emergency Expert', '🆘', 'Log 5 emergency squawk aircraft', emergency_count >= 5, emergency_count, 5)
     add_achievement('emergency_10', 'Emergency Veteran', '🚑', 'Log 10 emergency squawk aircraft', emergency_count >= 10, emergency_count, 10)
     
-    # --- Bizjet/Private Achievement (TODO: pre-compute in v1.3.2) ---
-    # Bizjet and regional achievements temporarily disabled - queries too slow on large databases
-    # These will be re-enabled with pre-computed counts in a future update
-    bizjet_count = 0  # Placeholder - will pre-compute later
+    # --- Bizjet/Private Achievements (pre-computed counts) ---
+    # Bizjet achievements (now using pre-computed counts)
+    
+    bizjet_count = stats["bizjet_count"] or 0 if stats else 0
     add_achievement('bizjet_spotter', 'Bizjet Spotter', '💼', 'Log 5,000 business jets', bizjet_count >= 5000, bizjet_count, 5000)
     add_achievement('bizjet_expert', 'Bizjet Expert', '🤵', 'Log 15,000 business jets', bizjet_count >= 15000, bizjet_count, 15000)
     add_achievement('bizjet_master', 'High Roller', '💰', 'Log 50,000 business jets', bizjet_count >= 50000, bizjet_count, 50000)
 
-    # --- Regional Jet Achievements (TODO: pre-compute in v1.3.2) ---
-    regional_count = 0  # Placeholder - will pre-compute later
+    # --- Regional Jet Achievements (pre-computed counts) ---
+    regional_count = stats["regional_count"] or 0 if stats else 0
     add_achievement('regional_spotter', 'Regional Spotter', '🛫', 'Log 5,000 regional aircraft', regional_count >= 5000, regional_count, 5000)
     add_achievement('regional_expert', 'Regional Expert', '🛬', 'Log 25,000 regional aircraft', regional_count >= 25000, regional_count, 25000)
     add_achievement('regional_master', 'Regional Master', '🏛️', 'Log 100,000 regional aircraft', regional_count >= 100000, regional_count, 100000)
