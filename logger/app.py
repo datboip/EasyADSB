@@ -2773,7 +2773,10 @@ def api_aircraft_trace_all(icao):
     
     # Calculate cutoff time
     now = datetime.utcnow()
-    if range_param.endswith('m'):
+    if range_param.endswith('h') and range_param[:-1].isdigit():
+        hours = int(range_param[:-1])
+        cutoff = now - timedelta(hours=hours)
+    elif range_param.endswith('m') and range_param[:-1].isdigit():
         minutes = int(range_param[:-1])
         cutoff = now - timedelta(minutes=minutes)
     elif range_param == '24h':
@@ -2809,18 +2812,28 @@ def api_aircraft_trace_all(icao):
     conn.close()
     
     # Group into separate flight sessions (gap > 30 min = new flight)
+    # Deduplicate consecutive positions with same lat/lon
     flights = []
     current_flight = []
     last_time = None
-    
+    last_lat = None
+    last_lon = None
+
     for row in rows:
         row_time = datetime.fromisoformat(row['timestamp'])
-        
+
         if last_time and (row_time - last_time).total_seconds() > 1800:  # 30 min gap
             if current_flight:
                 flights.append(current_flight)
             current_flight = []
-        
+            last_lat = None
+            last_lon = None
+
+        # Skip duplicate positions (same lat/lon as previous)
+        if row['lat'] == last_lat and row['lon'] == last_lon:
+            last_time = row_time
+            continue
+
         current_flight.append({
             'ts': row['timestamp'],
             'lat': row['lat'],
@@ -2830,6 +2843,8 @@ def api_aircraft_trace_all(icao):
             'trk': row['track'],
             'cs': row['callsign']
         })
+        last_lat = row['lat']
+        last_lon = row['lon']
         last_time = row_time
     
     if current_flight:
@@ -4901,12 +4916,212 @@ def api_gallery():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# REPLAY API
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/replay/dates')
+def api_replay_dates():
+    """Return available dates with position/aircraft counts for replay date picker.
+    Uses daily_stats if populated, otherwise falls back to a positions query."""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Try pre-computed daily_stats first (instant)
+    cursor.execute('SELECT COUNT(*) FROM daily_stats WHERE total_positions > 0')
+    if cursor.fetchone()[0] > 0:
+        cursor.execute('''
+            SELECT date as d, total_positions as p, unique_aircraft as a
+            FROM daily_stats WHERE total_positions > 0
+            ORDER BY date DESC LIMIT 90
+        ''')
+        dates = [{'d': row['d'], 'p': row['p'], 'a': row['a']} for row in cursor.fetchall()]
+    else:
+        # Fallback: separate MIN/MAX queries use timestamp index (instant)
+        cursor.execute('SELECT MIN(timestamp) FROM positions')
+        mn = cursor.fetchone()[0]
+        cursor.execute('SELECT MAX(timestamp) FROM positions')
+        mx = cursor.fetchone()[0]
+        dates = []
+        if mn and mx:
+            start = datetime.fromisoformat(mn).date()
+            end = datetime.fromisoformat(mx).date()
+            d = end
+            while d >= start and len(dates) < 90:
+                dates.append({'d': d.isoformat(), 'p': 0, 'a': 0})
+                d -= timedelta(days=1)
+
+    conn.close()
+    return jsonify({'dates': dates})
+
+
+@app.route('/api/replay/frames')
+def api_replay_frames():
+    """
+    Stream position data as NDJSON, bucketed into time frames.
+    Query params:
+        - date: YYYY-MM-DD (base date, required)
+        - bucket: seconds per frame (default 30)
+        - hours: hours of data to load (default 24, 0 = full day)
+    Uses timestamp range for index-friendly queries instead of date().
+    """
+    date_str = request.args.get('date')
+    live = request.args.get('live', '').lower() == 'true'
+    if not date_str:
+        if live:
+            date_str = datetime.utcnow().strftime('%Y-%m-%d')
+        else:
+            return jsonify({'error': 'date parameter required'}), 400
+
+    bucket = int(request.args.get('bucket', 30))
+    if bucket < 5:
+        bucket = 5
+
+    hours = int(request.args.get('hours', 24))
+    if hours <= 0 or hours > 24:
+        hours = 24
+
+    # Build timestamp range (index-friendly, no date() function)
+    # For today: use current time as end. For past dates: use end of day.
+    now = datetime.utcnow()
+    today_str = now.strftime('%Y-%m-%d')
+    if date_str == today_str:
+        day_end = now
+    else:
+        day_end = datetime.fromisoformat(date_str + 'T23:59:59')
+    day_start = datetime.fromisoformat(date_str + 'T00:00:00')
+    ts_end = day_end.strftime('%Y-%m-%d %H:%M:%S')
+    if hours < 24:
+        ts_start = (day_end - timedelta(hours=hours)).strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        ts_start = day_start.strftime('%Y-%m-%d %H:%M:%S')
+
+    def generate():
+        conn = get_db(timeout=60)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT
+                (CAST(strftime('%s', timestamp) AS INTEGER) / :bucket) * :bucket AS frame_ts,
+                icao, callsign,
+                ROUND(AVG(lat), 5) AS lat, ROUND(AVG(lon), 5) AS lon,
+                ROUND(AVG(altitude)) AS alt, ROUND(AVG(track)) AS trk,
+                ROUND(AVG(speed)) AS spd, aircraft_type, category
+            FROM positions
+            WHERE timestamp >= :ts_start AND timestamp <= :ts_end
+              AND lat IS NOT NULL AND lon IS NOT NULL
+            GROUP BY frame_ts, icao
+            ORDER BY frame_ts
+        ''', {'ts_start': ts_start, 'ts_end': ts_end, 'bucket': bucket})
+
+        current_ts = None
+        aircraft = []
+
+        for row in cursor:
+            ts = row['frame_ts']
+            if ts != current_ts:
+                if current_ts is not None:
+                    yield json.dumps({'t': current_ts, 'a': aircraft}) + '\n'
+                current_ts = ts
+                aircraft = []
+            aircraft.append([
+                row['icao'], row['callsign'],
+                row['lat'], row['lon'],
+                row['alt'], row['trk'],
+                row['spd'], row['aircraft_type'], row['category']
+            ])
+
+        if current_ts is not None:
+            yield json.dumps({'t': current_ts, 'a': aircraft}) + '\n'
+
+        conn.close()
+
+    return Response(
+        generate(),
+        mimetype='application/x-ndjson',
+        headers={
+            'Cache-Control': 'public, max-age=3600',
+            'X-Content-Type-Options': 'nosniff'
+        }
+    )
+
+
+@app.route('/api/replay/frames/since')
+def api_replay_frames_since():
+    """
+    Stream new position frames since a given timestamp.
+    Query params:
+        - after: Unix timestamp (required)
+        - bucket: seconds per frame (default 30)
+    Returns NDJSON, same format as /api/replay/frames.
+    Max lookback: 24 hours.
+    """
+    after = request.args.get('after', type=int)
+    if after is None:
+        return jsonify({'error': 'after parameter required (unix timestamp)'}), 400
+
+    bucket = int(request.args.get('bucket', 30))
+    if bucket < 5:
+        bucket = 5
+
+    # Clamp to max 24h lookback
+    now_ts = int(datetime.utcnow().timestamp())
+    min_after = now_ts - 86400
+    if after < min_after:
+        after = min_after
+
+    after_dt = datetime.utcfromtimestamp(after).strftime('%Y-%m-%d %H:%M:%S')
+
+    def generate():
+        conn = get_db(timeout=60)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT
+                (CAST(strftime('%s', timestamp) AS INTEGER) / :bucket) * :bucket AS frame_ts,
+                icao, callsign,
+                ROUND(AVG(lat), 5) AS lat, ROUND(AVG(lon), 5) AS lon,
+                ROUND(AVG(altitude)) AS alt, ROUND(AVG(track)) AS trk,
+                ROUND(AVG(speed)) AS spd, aircraft_type, category
+            FROM positions
+            WHERE timestamp > :after_ts
+              AND lat IS NOT NULL AND lon IS NOT NULL
+            GROUP BY frame_ts, icao
+            ORDER BY frame_ts
+        ''', {'after_ts': after_dt, 'bucket': bucket})
+
+        current_ts = None
+        aircraft = []
+
+        for row in cursor:
+            ts = row['frame_ts']
+            if ts != current_ts:
+                if current_ts is not None:
+                    yield json.dumps({'t': current_ts, 'a': aircraft}) + '\n'
+                current_ts = ts
+                aircraft = []
+            aircraft.append([
+                row['icao'], row['callsign'],
+                row['lat'], row['lon'],
+                int(row['alt']) if row['alt'] else 0,
+                int(row['trk']) if row['trk'] else 0,
+                int(row['spd']) if row['spd'] else 0,
+                row['aircraft_type'] or '', row['category'] or ''
+            ])
+
+        if current_ts is not None:
+            yield json.dumps({'t': current_ts, 'a': aircraft}) + '\n'
+
+        cursor.close()
+        conn.close()
+
+    return Response(generate(), mimetype='application/x-ndjson')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # STARTUP
 # ══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == '__main__':
     log.info("=" * 60)
-    log.info("EasyADSB Flight Logger v1.3.0")
+    log.info("EasyADSB Flight Logger v1.4.0")
     log.info("=" * 60)
     log.info(f"Ultrafeeder: {ULTRAFEEDER_HOST}:{ULTRAFEEDER_PORT}")
     log.info(f"Interval: {LOG_INTERVAL} seconds")
