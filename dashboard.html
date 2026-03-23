@@ -2035,6 +2035,7 @@
                         <option value="30">30 days</option>
                     </select>
                     <button class="map-control-btn" id="btn-follow" onclick="toggleFollow()">Follow</button>
+                    <a href="?replay=true" target="_blank" class="map-control-btn" style="text-decoration: none;">&#9654; Replay</a>
                     <a href="#" id="tar1090-fullscreen" target="_blank" class="map-control-btn" style="text-decoration: none;">↗ tar1090</a>
                     <span class="map-stats" id="map-aircraft-count">0 aircraft</span>
                 </div>
@@ -2890,6 +2891,12 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
     </style>
+
+    <!-- Replay mode detection (before any other scripts) -->
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const REPLAY_MODE = urlParams.has('replay');
+    </script>
 
     <!-- Load station IDs from generated config (created by setup.sh) -->
     <script>
@@ -5301,6 +5308,7 @@
                 
                 const recordItems = [
                     { key: 'highest_altitude', icon: '⬆️', label: 'Max Altitude', format: r => `${r.altitude?.toLocaleString()} ft`, sub: r => r.callsign || r.icao, tooltip: 'Highest altitude aircraft recorded' },
+                    { key: 'lowest_altitude', icon: '⬇️', label: 'Lowest Altitude', format: r => `${r.altitude?.toLocaleString()} ft`, sub: r => r.callsign || r.icao, tooltip: 'Lowest altitude aircraft recorded' },
                     { key: 'fastest', icon: '⚡', label: 'Top Speed', format: r => formatSpeed(r.speed), sub: r => r.callsign || r.icao, tooltip: 'Fastest ground speed recorded' },
                     { key: 'best_signal', icon: '📡', label: 'Best Signal', format: r => `${r.rssi} dB`, sub: r => r.callsign || r.icao, tooltip: 'Strongest signal received (closest pass)' },
                     { key: 'busiest_day', icon: '📅', label: 'Busiest Day', format: r => `${r.count?.toLocaleString()} aircraft`, sub: r => r.date, tooltip: 'Most unique aircraft logged in a single day' },
@@ -6214,14 +6222,16 @@
 
         // Initialize
         window.lastStatsUpdate = Date.now();
+        if (!REPLAY_MODE) {
         updateReferenceIDs();
         updateStats();
         updateLiveAircraft(); // Initial load
         setInterval(updateStats, 5000);
         setInterval(updateLiveAircraft, 5000); // Update aircraft every 5 seconds
-        
+
         // Check for updates on load (delayed to not slow down initial render)
         setTimeout(checkForUpdates, 3000);
+        }
         
         // Show PiAware claim message if not dismissed
         if (localStorage.getItem('piaware-claim-dismissed') !== 'true') {
@@ -6955,6 +6965,7 @@
         const openAircraftModal = viewAircraftDetail;
 
         // Initialize logger
+        if (!REPLAY_MODE) {
         checkLoggerStatus();
         setInterval(checkLoggerStatus, 30000); // Check every 30 seconds
         setInterval(updateLeaderboard, 60000); // Refresh leaderboard every 60 seconds
@@ -6970,6 +6981,7 @@
                 loadSystemStats();
             }
         }, 30000); // Refresh system stats every 30 seconds
+        }
 
         // ============================================
         // CUSTOM LEAFLET MAP
@@ -7025,13 +7037,15 @@
 
         // SVG aircraft icons (like tar1090)
         const aircraftSVG = {
-            // Default jet aircraft
+            // Default jet (narrowbody airliner / biz jet)
             jet: `<path d="M 0,-15 L 2,-10 L 2,-2 L 12,5 L 12,7 L 2,4 L 2,10 L 5,13 L 5,15 L 0,13 L -5,15 L -5,13 L -2,10 L -2,4 L -12,7 L -12,5 L -2,-2 L -2,-10 Z"/>`,
-            // Helicopter
+            // Helicopter (rotor bar + narrow body + tail boom)
             heli: `<path d="M 0,-12 L 2,-10 L 2,-3 L 6,-3 L 6,-1 L 2,-1 L 2,6 L 5,9 L 5,11 L 2,9 L 2,12 L -2,12 L -2,9 L -5,11 L -5,9 L -2,6 L -2,-1 L -6,-1 L -6,-3 L -2,-3 L -2,-10 Z M -8,-10 L 8,-10 L 8,-8 L -8,-8 Z"/>`,
-            // Small prop plane
+            // Small prop (single engine, high straight wing)
             prop: `<path d="M 0,-12 L 1.5,-8 L 1.5,0 L 9,4 L 9,5.5 L 1.5,3 L 1.5,9 L 4,11 L 4,12.5 L 0,11 L -4,12.5 L -4,11 L -1.5,9 L -1.5,3 L -9,5.5 L -9,4 L -1.5,0 L -1.5,-8 Z"/>`,
-            // Heavy/wide-body
+            // Turboprop (twin engine, straighter wider wing)
+            turboprop: `<path d="M 0,-13 L 2,-9 L 2,-1 L 11,4 L 11,6 L 2,3 L 2,9 L 5,12 L 5,13.5 L 0,11.5 L -5,13.5 L -5,12 L -2,9 L -2,3 L -11,6 L -11,4 L -2,-1 L -2,-9 Z"/><circle cx="5" cy="2" r="1.2"/><circle cx="-5" cy="2" r="1.2"/>`,
+            // Heavy/wide-body (big swept wings)
             heavy: `<path d="M 0,-18 L 3,-12 L 3,-3 L 15,6 L 15,9 L 3,5 L 3,12 L 7,16 L 7,18 L 0,15 L -7,18 L -7,16 L -3,12 L -3,5 L -15,9 L -15,6 L -3,-3 L -3,-12 Z"/>`,
             // Ground vehicle
             ground: `<rect x="-6" y="-6" width="12" height="12" rx="2"/>`,
@@ -7041,26 +7055,65 @@
 
         // Determine aircraft icon type
         function getAircraftSVGType(type, category) {
-            if (!type) return 'jet';
-
-            // Helicopters
-            if (/^(R22|R44|R66|EC|AS|H1[2345]|H16|H25|H6|B0[56]|B1[0-9]|B2[0-9]|B4[0-9]|A1[0-9]|S7[0-6]|S9[0-2]|MD[0-9]|BK|EH|NH|CH|AH|UH|MH|SH|KA|MI|W3|AS3|EC[0-9]|H60)/.test(type)) {
-                return 'heli';
-            }
-            // Heavy jets
-            if (/^(A3[0-8]|A350|B7[4-8]|B77|B78|MD1|DC10|L101|IL[0-9]|AN[0-9]|C5|C17)/.test(type)) {
-                return 'heavy';
-            }
-            // Small props
-            if (/^(C1[0-9][0-9]|C20|C21|PA[0-9]|P28|BE[0-9]|SR[0-9]|DA[0-9]|M20|AA[0-9]|TB[0-9])/.test(type)) {
-                return 'prop';
-            }
-            // Ground vehicles
-            if (category === 'C3' || type === 'GRND') {
+            // Ground vehicles first (by category or type)
+            if (category === 'C1' || category === 'C2' || category === 'C3' || type === 'GRND') {
                 return 'ground';
             }
 
-            return 'jet';
+            if (type) {
+                var t = type.toUpperCase();
+
+                // Helicopters
+                if (/^(R22|R44|R66|EC[0-9]|AS[0-9]|H1[2345]|H160|H175|H2[0-9]|H6[0-9]|B0[56]|B1[0-9]|B2[0-9]|B4[0-9]|A1[0-9][0-9]|S7[0-6]|S9[0-2]|MD[0-9]|BK|EH|NH|CH[0-9]|AH|UH|MH|SH|KA[0-9]|MI[0-9]|W3|LYNX|PUMA|A109|A139|A149|A169|A189|B206|B407|B429|B412|B505|S61|S64|S70|S76|S92|V22|MV22|BALL)/.test(t)) {
+                    return 'heli';
+                }
+                // Heavy / wide-body
+                if (/^(A3[0-9]|A350|B7[4-8]|B77|B78|MD1|DC10|L101|IL[0-9]|AN[0-9]|C5M?$|C17|KC10|KC46|B52|B1B|B2|E3|E4|E6|E8|P3|P8|A400|C130|KC13|C141|C133|L382|C160)/.test(t)) {
+                    return 'heavy';
+                }
+                // Turboprops (twin engine)
+                if (/^(AT[47][0-9]|DH8[A-D]|DHC[678]|B350|B300|B200|B190|BE[0-9][0-9]|C208|C212|PC[0-9]|TBM[0-9]|P180|P166|SW[2-4]|SF34|JS[0-9]|D228|D328|CN35|L410|E120|M600|CARV|EPIC|PIAT|AC[0-9][0-9]|J328)/.test(t)) {
+                    return 'turboprop';
+                }
+                // Small props (single engine, GA)
+                if (/^(C1[0-9][0-9]|C20[0-9]|C21[0-9]|C30[0-9]|C31[0-9]|C33[0-9]|C34[0-9]|C40[0-9]|C41[0-9]|PA[0-9]|P28|P32|P46|P34|BE[0-9][0-9]$|SR[0-9]|DA[0-9]|M20|AA[0-9]|TB[0-9]|MC[0-9]|RV[0-9]|TOBA|LGEZ|HUSK|COY2|GLST|G[0-9]$|TRIN|TEX2|SPIT|T6|T34|T28|VENT|CIRR|LNCE|SM10|RANG|BL[0-9]|CH7|CTLS|CTSW|P2[0-9]|P14|DIMO|DV20|EV97|FLAS|FK[0-9]|ICON|J[0-9]$|PULS|SAVA|ULAC|Z[0-9][0-9]|RV|YK|AN2)/.test(t)) {
+                    return 'prop';
+                }
+            }
+
+            // Category-based fallback (ADS-B category codes)
+            if (category) {
+                // A1=Light, A2=Small — single engine props
+                if (category === 'A1' || category === 'A2' || category === 'B1' || category === 'B2') {
+                    return 'prop';
+                }
+                // A3=Large — turboprops and regional
+                if (category === 'A3') {
+                    return 'turboprop';
+                }
+                // A4=High performance (757 class)
+                if (category === 'A4') {
+                    return 'jet';
+                }
+                // A5=Heavy, A6=High-performance/high-vortex
+                if (category === 'A5' || category === 'A6') {
+                    return 'heavy';
+                }
+                // A7=Rotorcraft
+                if (category === 'A7' || category === 'B6') {
+                    return 'heli';
+                }
+                // B1=Glider, B2=Lighter than air — show as prop
+                if (category === 'B4') {
+                    return 'prop'; // ultralight
+                }
+            }
+
+            // If we have a type but it didn't match any regex, default to jet
+            if (type) return 'jet';
+
+            // No type AND no useful category — unknown dot
+            return 'unknown';
         }
 
         // Create rotated aircraft icon using SVG
@@ -7072,8 +7125,8 @@
             const svgPath = aircraftSVG[svgType];
 
             const isSelected = aircraft.hex === followAircraft;
-            const size = isSelected ? 32 : 24;
-            const viewBox = svgType === 'heavy' ? '-18 -20 36 40' : '-15 -17 30 34';
+            const size = isSelected ? 32 : (svgType === 'heavy' ? 28 : svgType === 'turboprop' ? 26 : svgType === 'prop' ? 22 : 24);
+            const viewBox = svgType === 'heavy' ? '-18 -20 36 40' : svgType === 'turboprop' ? '-14 -16 28 32' : '-15 -17 30 34';
 
             const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" style="width:${size}px;height:${size}px;transform:rotate(${heading}deg)">
                 <g fill="${color}" stroke="#000" stroke-width="0.5">${svgPath}</g>
@@ -7500,7 +7553,7 @@
         // Fetch trail from logger API
         async function fetchTrailForAircraft(icao) {
             try {
-                const url = `http://${location.hostname}:${LOGGER_PORT}/api/aircraft/${icao}/trace?range=15m`;
+                const url = `http://${location.hostname}:${LOGGER_PORT}/api/aircraft/${icao}/trace?range=4h`;
                 const response = await fetch(url);
                 if (!response.ok) return null;
                 const data = await response.json();
@@ -7519,8 +7572,8 @@
         // Build altitude-colored trail from stored positions
         // Creates separate polyline segments colored by altitude
         // Gaps are shown when distance between points is too large (aircraft went out of range)
-        function updateAltitudeTrail(icao, trailGroup) {
-            const positions = aircraftPositions[icao];
+        function updateAltitudeTrail(icao, trailGroup, positionsObj) {
+            const positions = (positionsObj || aircraftPositions)[icao];
             if (!positions || positions.length < 2) return;
 
             // Clear existing segments
@@ -7738,7 +7791,1558 @@
         }
 
         // Initialize map when DOM is ready
-        document.addEventListener('DOMContentLoaded', initLiveMap);
+        if (!REPLAY_MODE) {
+            document.addEventListener('DOMContentLoaded', initLiveMap);
+        }
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- REPLAY MODE -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+    <div id="replay-container" style="display:none;">
+        <div id="replay-map"></div>
+        <div id="replay-time-overlay">
+            <span id="replay-time-text">00:00:00</span>
+            <span id="replay-date-text"></span>
+        </div>
+        <div id="replay-aircraft-count">0 aircraft</div>
+        <div id="replay-loading">
+            <div class="replay-loading-inner">
+                <div class="replay-spinner"></div>
+                <div id="replay-loading-text">Loading replay data...</div>
+                <div id="replay-loading-bar-wrap">
+                    <div id="replay-loading-bar"></div>
+                </div>
+                <div id="replay-loading-progress">0 frames</div>
+            </div>
+        </div>
+        <div id="replay-setup">
+            <div class="replay-setup-card">
+                <h3>Replay Settings</h3>
+                <div class="replay-setup-row">
+                    <label>Time Range</label>
+                    <select id="replay-setup-range">
+                        <option value="3600">Last 1 hour (fastest)</option>
+                        <option value="10800" selected>Last 3 hours</option>
+                        <option value="21600">Last 6 hours</option>
+                        <option value="43200">Last 12 hours</option>
+                        <option value="0">Full Day</option>
+                    </select>
+                </div>
+                <div class="replay-setup-row">
+                    <label>Quality</label>
+                    <select id="replay-setup-quality">
+                        <option value="quick" selected>Quick Overview</option>
+                        <option value="standard">Standard</option>
+                        <option value="detailed">Detailed</option>
+                    </select>
+                    <div id="replay-setup-quality-desc" style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;"></div>
+                </div>
+                <div class="replay-setup-row">
+                    <label>Date</label>
+                    <input type="date" id="replay-setup-date">
+                </div>
+                <button id="replay-setup-start">Start Replay</button>
+                <div id="replay-setup-status"></div>
+            </div>
+        </div>
+        <div id="replay-filter-panel" style="display:none;">
+            <div class="replay-filter-header">
+                <span>Filter Aircraft</span>
+                <button id="replay-filter-close">&#10005;</button>
+            </div>
+            <div class="replay-filter-cats" id="replay-filter-cats"></div>
+            <div class="replay-filter-types" id="replay-filter-types"></div>
+        </div>
+        <div id="replay-controls">
+            <button id="replay-btn-play" title="Play/Pause">&#9654;</button>
+            <div id="replay-scrubber-wrap">
+                <canvas id="replay-activity-canvas"></canvas>
+                <input type="range" id="replay-scrubber" min="0" max="100" value="0" step="1">
+                <div id="replay-time-ticks"></div>
+            </div>
+            <select id="replay-range" title="Time window to loop">
+                <option value="3600">Last 1hr</option>
+                <option value="10800" selected>Last 3hr</option>
+                <option value="21600">Last 6hr</option>
+                <option value="43200">Last 12hr</option>
+                <option value="0">Full Day</option>
+            </select>
+            <select id="replay-speed" title="Total loop duration">
+                <option value="5">5s loop</option>
+                <option value="10" selected>10s loop</option>
+                <option value="15">15s loop</option>
+                <option value="30">30s loop</option>
+                <option value="60">60s loop</option>
+            </select>
+            <select id="replay-bucket" title="Frame interval (larger = faster load)">
+                <option value="5">5s</option>
+                <option value="10">10s</option>
+                <option value="30">30s</option>
+                <option value="60">1min</option>
+                <option value="300" selected>5min</option>
+                <option value="600">10min</option>
+                <option value="1800">30min</option>
+                <option value="3600">1hr</option>
+            </select>
+            <input type="date" id="replay-date-picker">
+            <button id="replay-btn-1h" class="replay-preset" title="Last 1 hour">1h</button>
+            <button id="replay-btn-3h" class="replay-preset active" title="Last 3 hours">3h</button>
+            <button id="replay-btn-6h" class="replay-preset" title="Last 6 hours">6h</button>
+            <button id="replay-btn-export" title="Export KML for Google Earth">Export</button>
+            <button id="replay-btn-filter" title="Filter aircraft types">Filter</button>
+            <button id="replay-btn-trails" class="active" title="Toggle trails">Trails</button>
+            <button id="replay-btn-range" title="Toggle signal range">Range</button>
+            <button id="replay-btn-loop" title="Toggle loop">Loop</button>
+            <button id="replay-btn-live" title="Go Live — weather radar loop">Live</button>
+            <button id="replay-btn-privacy" title="Hide receiver location">Privacy</button>
+            <a id="replay-btn-back" href="/" title="Back to dashboard">&#10005;</a>
+        </div>
+    </div>
+
+    <style>
+        #replay-container {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 99999; background: #0a0a0a;
+        }
+        #replay-map { width: 100%; height: 100%; }
+        #replay-time-overlay {
+            position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+            z-index: 100001; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+            padding: 8px 20px; border-radius: 8px; text-align: center;
+            border: 1px solid rgba(102,126,234,0.3);
+        }
+        #replay-time-text {
+            font-family: 'SF Mono', 'Fira Code', monospace; font-size: 28px;
+            font-weight: 700; color: #fff; letter-spacing: 2px;
+        }
+        #replay-date-text {
+            display: block; font-size: 12px; color: rgba(255,255,255,0.6);
+            margin-top: 2px;
+        }
+        #replay-aircraft-count {
+            position: absolute; top: 12px; right: 16px; z-index: 100001;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+            padding: 8px 14px; border-radius: 8px; color: #fff;
+            font-size: 14px; font-weight: 600;
+            border: 1px solid rgba(102,126,234,0.3);
+        }
+        #replay-loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 100002; background: rgba(0,0,0,0.85);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .replay-loading-inner { text-align: center; color: #fff; }
+        .replay-spinner {
+            width: 48px; height: 48px; margin: 0 auto 16px;
+            border: 3px solid rgba(102,126,234,0.3); border-top-color: #667eea;
+            border-radius: 50%; animation: replay-spin 0.8s linear infinite;
+        }
+        @keyframes replay-spin { to { transform: rotate(360deg); } }
+        #replay-loading-text { font-size: 16px; font-weight: 600; }
+        #replay-loading-bar-wrap {
+            width: 280px; height: 6px; background: rgba(255,255,255,0.1);
+            border-radius: 3px; margin: 14px auto 0; overflow: hidden;
+        }
+        #replay-loading-bar {
+            width: 0%; height: 100%; background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 3px; transition: width 0.3s ease;
+        }
+        #replay-loading-progress { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 8px; }
+        #replay-setup {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 100003; background: rgba(0,0,0,0.7);
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        .replay-setup-card {
+            background: #1a1a2e; border: 1px solid rgba(102,126,234,0.4);
+            border-radius: 12px; padding: 28px 32px; min-width: 300px; max-width: 360px;
+            color: #fff; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        .replay-setup-card h3 {
+            margin: 0 0 20px; font-size: 20px; font-weight: 600; color: #667eea;
+        }
+        .replay-setup-row { margin-bottom: 14px; }
+        .replay-setup-row label {
+            display: block; font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 5px;
+        }
+        .replay-setup-row select, .replay-setup-row input[type="date"] {
+            width: 100%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+            color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 14px;
+            color-scheme: dark; box-sizing: border-box;
+        }
+        .replay-setup-row select option {
+            background: #1a1a2e; color: #fff;
+        }
+        #replay-setup-start {
+            width: 100%; margin-top: 8px; padding: 12px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none; border-radius: 8px; color: #fff;
+            font-size: 15px; font-weight: 600; cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        #replay-setup-start:hover { opacity: 0.9; }
+        #replay-setup-status {
+            text-align: center; font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 12px;
+        }
+        #replay-controls {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            z-index: 100001; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+            padding: 10px 16px; display: flex; align-items: center; gap: 10px;
+            border-top: 1px solid rgba(102,126,234,0.3); box-sizing: border-box;
+        }
+        #replay-controls button, #replay-controls select, #replay-btn-back {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+            font-size: 13px; white-space: nowrap;
+        }
+        #replay-controls button:hover, #replay-controls select:hover {
+            background: rgba(102,126,234,0.3);
+        }
+        #replay-controls button.active {
+            background: rgba(102,126,234,0.4); border-color: #667eea;
+        }
+        #replay-btn-play { font-size: 16px; min-width: 40px; }
+        .replay-preset { min-width: 32px; font-size: 12px; }
+        .replay-preset.active { background: rgba(102,126,234,0.5); }
+        #replay-scrubber-wrap {
+            flex: 1; position: relative; height: 44px;
+        }
+        #replay-activity-canvas {
+            position: absolute; left: 0; top: 0; width: 100%; height: 30px;
+            border-radius: 4px; pointer-events: none; opacity: 0.6;
+        }
+        #replay-scrubber {
+            position: absolute; left: 0; top: 0; z-index: 1; width: 100%; height: 30px;
+            -webkit-appearance: none; appearance: none;
+            background: transparent; cursor: pointer; margin: 0;
+        }
+        #replay-scrubber::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 6px; height: 30px;
+            background: #667eea; border-radius: 2px; cursor: pointer;
+            box-shadow: 0 0 8px rgba(102,126,234,0.7);
+            border: 1px solid rgba(255,255,255,0.4);
+        }
+        #replay-scrubber::-moz-range-thumb {
+            width: 6px; height: 30px; border: 1px solid rgba(255,255,255,0.4);
+            background: #667eea; border-radius: 2px; cursor: pointer;
+            box-shadow: 0 0 8px rgba(102,126,234,0.7);
+        }
+        #replay-scrubber::-webkit-slider-runnable-track {
+            height: 2px; background: rgba(255,255,255,0.15); border-radius: 1px;
+        }
+        #replay-scrubber::-moz-range-track {
+            height: 2px; background: rgba(255,255,255,0.15); border-radius: 1px;
+        }
+        #replay-time-ticks {
+            position: absolute; left: 0; bottom: 0; width: 100%; height: 14px;
+            pointer-events: none; display: flex; justify-content: space-between;
+            font-size: 9px; color: rgba(255,255,255,0.4); font-family: monospace;
+        }
+        #replay-time-ticks span {
+            position: absolute; transform: translateX(-50%);
+        }
+        #replay-controls select { background: rgba(255,255,255,0.1); }
+        #replay-controls select option { background: #1a1a2e; color: #fff; }
+        #replay-date-picker {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 13px;
+            color-scheme: dark;
+        }
+        #replay-btn-back {
+            text-decoration: none; font-size: 18px; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+            min-width: 36px; padding: 4px;
+        }
+        /* Replay filter panel */
+        #replay-filter-panel {
+            position: absolute; bottom: 56px; right: 16px;
+            z-index: 100001; background: rgba(20,20,40,0.95);
+            border: 1px solid rgba(102,126,234,0.4); border-radius: 10px;
+            padding: 12px 14px; min-width: 220px; max-width: 320px;
+            max-height: 60vh; overflow-y: auto; backdrop-filter: blur(10px);
+            color: #fff;
+        }
+        .replay-filter-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 10px; font-weight: 600; font-size: 14px;
+        }
+        .replay-filter-header button {
+            background: none; border: none; color: #aaa; cursor: pointer;
+            font-size: 16px; padding: 2px 6px;
+        }
+        .replay-filter-header button:hover { color: #fff; }
+        .replay-filter-cats { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+        .replay-filter-cat {
+            padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+            background: rgba(102,126,234,0.3); border: 1px solid rgba(102,126,234,0.5);
+            white-space: nowrap;
+        }
+        .replay-filter-cat.off {
+            background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.4);
+        }
+        .replay-filter-types {
+            display: flex; flex-wrap: wrap; gap: 4px; max-height: 40vh; overflow-y: auto;
+        }
+        .replay-filter-type {
+            padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+            font-family: monospace;
+        }
+        .replay-filter-type.off {
+            background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.25); text-decoration: line-through;
+        }
+        /* Replay popup (dark theme) */
+        .replay-popup .leaflet-popup-content-wrapper {
+            background: rgba(20,20,40,0.95); color: #fff; border-radius: 10px;
+            border: 1px solid rgba(102,126,234,0.3); backdrop-filter: blur(8px);
+        }
+        .replay-popup .leaflet-popup-tip { background: rgba(20,20,40,0.95); }
+        .replay-popup .leaflet-popup-close-button { color: #aaa; }
+        .replay-popup .leaflet-popup-close-button:hover { color: #fff; }
+        /* Aircraft markers in replay */
+        #replay-container .aircraft-marker { transition: none !important; }
+        #replay-container .aircraft-label {
+            font-size: 10px; color: #fff; white-space: nowrap;
+            text-shadow: 1px 1px 2px #000, -1px -1px 2px #000;
+        }
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            #replay-controls { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+            #replay-scrubber-wrap { order: 10; flex-basis: 100%; }
+            #replay-time-text { font-size: 22px; }
+        }
+    </style>
+
+    <script>
+    if (REPLAY_MODE) {
+    (function() {
+        'use strict';
+
+        const PLAY_SYMBOL = '\u25B6';      // ▶
+        const PAUSE_SYMBOL = '\u23F8';      // ⏸
+
+        // ── State ──
+        let replayMap = null;
+        let replayFrames = [];         // [{t, a}, ...] sorted by t
+        let replayFrameTimes = [];     // [t1, t2, ...] for display
+        let replayStartTime = 0;
+        let replayEndTime = 0;
+        let replayCurrentTime = 0;
+        let replayFrameIndex = 0;      // current frame being shown
+        let replayLoopDuration = 10;   // seconds for full loop
+        let replayBucket = 300;
+        let replayRange = 10800;       // seconds (0 = full day)
+        let replayPlaying = false;
+        let replayLoop = true;
+        let replayLive = false;
+        let replayLivePollTimer = null;
+        let replayLiveHours = 3;
+        let replayIsScrubbing = false;
+        let replayLiveDwelling = false;
+        let replayLiveDwellStart = 0;
+        const LIVE_DWELL_MS = 15000;      // 15s dwell on live frame before loop
+        const LIVE_POLL_INTERVAL = 30000;
+        const MAX_LIVE_FRAMES = 10000;
+        let replayShowTrails = true;
+        let replayLastRealTime = null;
+        let replayAccumTime = 0;       // accumulated ms since last frame step
+        let replayAnimId = null;
+        let replayMarkers = {};        // icao -> {marker, label}
+        let replayTrails = {};         // icao -> L.layerGroup
+        let replayPositions = {};      // icao -> [[lat,lon,alt], ...]
+        let replayLastSeen = {};       // icao -> frame index
+        let replayAvailableDates = [];
+        let replayPreloadData = null;  // pre-loaded frames from startup
+        let replayPreloadKey = '';     // key identifying preloaded data
+        let replayFilterCats = {};    // category -> true/false (true = visible)
+        let replayFilterTypes = {};   // aircraft_type -> true/false
+        let replayAllTypes = {};      // type -> {count, cat}
+
+        const TRAIL_MAX = 200;
+        const STALE_FADE_FRAMES = 3;   // fade over 3 frames after last seen
+
+        const CAT_LABELS = {
+            'prop': 'Props / Light',
+            'jet': 'Jets / Airliners',
+            'heavy': 'Heavies',
+            'heli': 'Helicopters',
+            'ground': 'Ground',
+            'unknown': 'Unknown'
+        };
+
+        // ── DOM refs ──
+        const $container = document.getElementById('replay-container');
+        const $timeText = document.getElementById('replay-time-text');
+        const $dateText = document.getElementById('replay-date-text');
+        const $acCount = document.getElementById('replay-aircraft-count');
+        const $loading = document.getElementById('replay-loading');
+        const $loadText = document.getElementById('replay-loading-text');
+        const $loadBar = document.getElementById('replay-loading-bar');
+        const $loadProg = document.getElementById('replay-loading-progress');
+        const $btnPlay = document.getElementById('replay-btn-play');
+        const $range = document.getElementById('replay-range');
+        const $scrubber = document.getElementById('replay-scrubber');
+        const $speed = document.getElementById('replay-speed');
+        const $bucket = document.getElementById('replay-bucket');
+        const $datePicker = document.getElementById('replay-date-picker');
+        const $btnTrails = document.getElementById('replay-btn-trails');
+        const $btnRange = document.getElementById('replay-btn-range');
+        const $btnFilter = document.getElementById('replay-btn-filter');
+        const $filterPanel = document.getElementById('replay-filter-panel');
+        const $filterCats = document.getElementById('replay-filter-cats');
+        const $filterTypes = document.getElementById('replay-filter-types');
+        const $filterClose = document.getElementById('replay-filter-close');
+        const $btnLoop = document.getElementById('replay-btn-loop');
+        const $btnLive = document.getElementById('replay-btn-live');
+        const $btnPrivacy = document.getElementById('replay-btn-privacy');
+        const $btnExport = document.getElementById('replay-btn-export');
+        const $preset1h = document.getElementById('replay-btn-1h');
+        const $preset3h = document.getElementById('replay-btn-3h');
+        const $preset6h = document.getElementById('replay-btn-6h');
+        const $activityCanvas = document.getElementById('replay-activity-canvas');
+        let replayRangePolygon = null;
+        let replayReceiverMarker = null;
+        let replayPrivacy = localStorage.getItem('easyadsb-privacy') === 'true';
+        let replayShowRange = false;
+        const $setup = document.getElementById('replay-setup');
+        const $setupRange = document.getElementById('replay-setup-range');
+        const $setupQuality = document.getElementById('replay-setup-quality');
+        const $setupQualityDesc = document.getElementById('replay-setup-quality-desc');
+        const $setupDate = document.getElementById('replay-setup-date');
+        const $setupStart = document.getElementById('replay-setup-start');
+        const $setupStatus = document.getElementById('replay-setup-status');
+
+        const QUALITY_PRESETS = {
+            quick:    { bucket: 300, speed: 10, label: '~5min snapshots, 10s loop' },
+            standard: { bucket: 60,  speed: 15, label: '~1min snapshots, 15s loop' },
+            detailed: { bucket: 30,  speed: 30, label: '~30s snapshots, 30s loop' }
+        };
+
+        // ── Initialization ──
+        document.addEventListener('DOMContentLoaded', initReplayMode);
+
+        function initReplayMode() {
+            // Hide dashboard content
+            document.querySelectorAll('body > *:not(#replay-container):not(script):not(style):not(link)').forEach(el => {
+                el.style.display = 'none';
+            });
+            $container.style.display = 'block';
+
+            // Create map
+            replayMap = L.map('replay-map', {
+                center: [34.9188, -84.0277],
+                zoom: 9,
+                zoomControl: true,
+                attributionControl: true
+            });
+            replayMap.attributionControl.setPrefix('EasyADSB Replay');
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19, subdomains: 'abcd',
+                attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+            }).addTo(replayMap);
+
+            // Fetch receiver location
+            fetch('/tar1090-data/receiver.json')
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (data && data.lat && data.lon) {
+                        replayMap.setView([data.lat, data.lon], 8);
+                        replayReceiverMarker = L.circleMarker([data.lat, data.lon], {
+                            radius: 8, fillColor: '#667eea', color: '#ffffff',
+                            weight: 2, opacity: 1, fillOpacity: 0.9
+                        }).addTo(replayMap).bindTooltip('Your Receiver', {permanent: false});
+                        if (replayPrivacy) replayMap.removeLayer(replayReceiverMarker);
+                    }
+                }).catch(() => {});
+
+            // Wire bottom controls
+            $btnPlay.addEventListener('click', replayTogglePlay);
+            $scrubber.addEventListener('input', replayScrub);
+            $speed.addEventListener('change', function() {
+                replayLoopDuration = parseInt($speed.value);
+                replayUpdateURL();
+            });
+            $range.addEventListener('change', function() {
+                replayRange = parseInt($range.value);
+                replayLoadDate($datePicker.value);
+                replayUpdateURL();
+            });
+            $bucket.addEventListener('change', function() {
+                replayBucket = parseInt($bucket.value);
+                replayLoadDate($datePicker.value);
+                replayUpdateURL();
+            });
+            $datePicker.addEventListener('change', function() {
+                replayLoadDate($datePicker.value);
+                replayUpdateURL();
+            });
+            $btnTrails.addEventListener('click', replayToggleTrails);
+            $btnRange.addEventListener('click', replayToggleRange);
+            $btnFilter.addEventListener('click', function() {
+                var vis = $filterPanel.style.display === 'none';
+                $filterPanel.style.display = vis ? 'block' : 'none';
+                $btnFilter.classList.toggle('active', vis);
+            });
+            $filterClose.addEventListener('click', function() {
+                $filterPanel.style.display = 'none';
+                $btnFilter.classList.remove('active');
+            });
+            $btnLoop.addEventListener('click', replayToggleLoop);
+
+            // Preset buttons
+            var presetMap = [
+                { btn: $preset1h, val: 3600 },
+                { btn: $preset3h, val: 10800 },
+                { btn: $preset6h, val: 21600 }
+            ];
+            presetMap.forEach(function(p) {
+                p.btn.addEventListener('click', function() {
+                    presetMap.forEach(function(pp) { pp.btn.classList.remove('active'); });
+                    p.btn.classList.add('active');
+                    $range.value = String(p.val);
+                    replayRange = p.val;
+                    var autoSpeed = replayAutoSpeed(replayRange);
+                    replayLoopDuration = autoSpeed;
+                    $speed.value = String(autoSpeed);
+                    replayLoadDate($datePicker.value);
+                    replayUpdateURL();
+                });
+            });
+
+            // Loop button starts active (default on)
+            $btnLoop.classList.add('active');
+
+            // Export, Live & Privacy buttons
+            $btnExport.addEventListener('click', replayExportKML);
+            $btnLive.addEventListener('click', replayGoLive);
+            $btnPrivacy.addEventListener('click', replayTogglePrivacy);
+
+            // Scrub interaction tracking for live mode
+            $scrubber.addEventListener('mousedown', function() { replayIsScrubbing = true; });
+            $scrubber.addEventListener('mouseup', function() { replayIsScrubbing = false; });
+            $scrubber.addEventListener('touchstart', function() { replayIsScrubbing = true; });
+            $scrubber.addEventListener('touchend', function() { replayIsScrubbing = false; });
+            if (replayPrivacy) $btnPrivacy.classList.add('active');
+
+            // Read URL params
+            const params = new URLSearchParams(window.location.search);
+            const dateParam = params.get('date');
+            const speedParam = params.get('speed');
+            const bucketParam = params.get('bucket');
+            const rangeParam = params.get('range');
+            const liveParam = params.get('live');
+            const hoursParam = params.get('hours');
+            if (params.get('privacy') === 'true') {
+                replayPrivacy = true;
+                localStorage.setItem('easyadsb-privacy', 'true');
+                $btnPrivacy.classList.add('active');
+            }
+
+            // If live mode requested via URL, skip setup and go live
+            if (liveParam === 'true') {
+                $setup.style.display = 'none';
+                if (hoursParam) { replayRange = parseInt(hoursParam) * 3600; $range.value = String(replayRange); }
+                if (bucketParam) { replayBucket = parseInt(bucketParam); $bucket.value = bucketParam; }
+                if (speedParam) { replayLoopDuration = parseInt(speedParam); $speed.value = speedParam; }
+                replayGoLive();
+                return;
+            }
+
+            // Fetch available dates
+            const LOGGER_PORT = window.FEEDER_CONFIG?.loggerPort || 8082;
+            fetch('http://' + location.hostname + ':' + LOGGER_PORT + '/api/replay/dates')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    replayAvailableDates = data.dates || [];
+                    var defaultDate = replayAvailableDates.length > 0 ? replayAvailableDates[0].d : new Date().toISOString().slice(0,10);
+                    var targetDate = dateParam || defaultDate;
+                    $datePicker.value = targetDate;
+                    $setupDate.value = targetDate;
+                    replayStartSetup(targetDate, dateParam, speedParam, bucketParam, rangeParam);
+                })
+                .catch(function() {
+                    var targetDate = dateParam || new Date().toISOString().slice(0,10);
+                    $datePicker.value = targetDate;
+                    $setupDate.value = targetDate;
+                    replayStartSetup(targetDate, dateParam, speedParam, bucketParam, rangeParam);
+                });
+        }
+
+        function replayStartSetup(targetDate, dateParam, speedParam, bucketParam, rangeParam) {
+            // If URL has explicit params, skip dialog and load directly
+            if (dateParam) {
+                $setup.style.display = 'none';
+                if (speedParam) { replayLoopDuration = parseInt(speedParam); $speed.value = speedParam; }
+                if (bucketParam) { replayBucket = parseInt(bucketParam); $bucket.value = bucketParam; }
+                if (rangeParam) { replayRange = parseInt(rangeParam); $range.value = rangeParam; }
+                replayLoadDate(targetDate);
+                return;
+            }
+
+            // Show setup dialog
+            $setup.style.display = 'flex';
+            $loading.style.display = 'none';
+
+            // Show quality description and update on change
+            function updateQualityDesc() {
+                var preset = QUALITY_PRESETS[$setupQuality.value];
+                var rangeHrs = parseInt($setupRange.value) || 86400;
+                var estFrames = Math.round(rangeHrs / preset.bucket);
+                $setupQualityDesc.textContent = preset.label + ' (~' + estFrames + ' frames)';
+            }
+            updateQualityDesc();
+            $setupQuality.addEventListener('change', updateQualityDesc);
+            $setupRange.addEventListener('change', updateQualityDesc);
+
+            // Load fastest combo (Last 1hr @ Quick) and start playing behind dialog
+            var preRange = 3600;
+            var preBucket = 300;
+            var preHours = 1;
+            var preKey = targetDate + '|' + preRange + '|' + preBucket;
+            $setupStatus.textContent = 'Loading preview...';
+
+            // Set state for the quick preset so bottom controls match
+            replayRange = preRange;
+            replayBucket = preBucket;
+            replayLoopDuration = 10;
+            $range.value = String(preRange);
+            $bucket.value = String(preBucket);
+            $speed.value = '10';
+            $datePicker.value = targetDate;
+
+            replayPreloadFrames(targetDate, preHours, preBucket).then(function(frames) {
+                replayPreloadData = frames;
+                replayPreloadKey = preKey;
+                if ($setup.style.display !== 'none' && frames.length > 0) {
+                    $setupStatus.textContent = 'Playing preview behind this dialog';
+                    // Start playing behind the dialog
+                    replayFrames = frames;
+                    replayFrameTimes = frames.map(function(f) { return f.t; });
+                    replayApplyRange();
+                    replayTogglePlay();
+                } else if (frames.length === 0) {
+                    $setupStatus.textContent = 'No data available for today';
+                }
+            }).catch(function() {
+                $setupStatus.textContent = '';
+            });
+
+            // Wire setup start button
+            $setupStart.addEventListener('click', function() {
+                var chosenRange = parseInt($setupRange.value);
+                var preset = QUALITY_PRESETS[$setupQuality.value];
+                var chosenDate = $setupDate.value || targetDate;
+                var chosenKey = chosenDate + '|' + chosenRange + '|' + preset.bucket;
+
+                $setup.style.display = 'none';
+
+                if (replayPreloadData && replayPreloadKey === chosenKey) {
+                    // Already playing this exact combo — just update loop duration and hide dialog
+                    replayLoopDuration = preset.speed;
+                    $speed.value = String(preset.speed);
+                    replayUpdateURL();
+                } else {
+                    // Stop current playback, load new settings
+                    if (replayPlaying) {
+                        replayPlaying = false;
+                        $btnPlay.textContent = PLAY_SYMBOL;
+                        if (replayAnimId) { cancelAnimationFrame(replayAnimId); replayAnimId = null; }
+                    }
+                    replayRange = chosenRange;
+                    replayBucket = preset.bucket;
+                    replayLoopDuration = preset.speed;
+                    $range.value = String(chosenRange);
+                    $bucket.value = String(preset.bucket);
+                    $speed.value = String(preset.speed);
+                    $datePicker.value = chosenDate;
+                    replayUpdateURL();
+                    replayLoadDate(chosenDate);
+                }
+            });
+        }
+
+        async function replayPreloadFrames(dateStr, hours, bucket) {
+            var LOGGER_PORT = window.FEEDER_CONFIG?.loggerPort || 8082;
+            var url = 'http://' + location.hostname + ':' + LOGGER_PORT + '/api/replay/frames?date=' + encodeURIComponent(dateStr) + '&bucket=' + bucket + '&hours=' + hours;
+            var response = await fetch(url);
+            if (!response.ok) throw new Error('Failed');
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '';
+            var frames = [];
+            while (true) {
+                var chunk = await reader.read();
+                if (chunk.done) break;
+                buffer += decoder.decode(chunk.value, { stream: true });
+                var idx;
+                while ((idx = buffer.indexOf('\n')) >= 0) {
+                    var line = buffer.slice(0, idx).trim();
+                    buffer = buffer.slice(idx + 1);
+                    if (line) {
+                        try { frames.push(JSON.parse(line)); } catch (e) {}
+                    }
+                }
+            }
+            return frames;
+        }
+
+        function replayUsePreloadedData(frames) {
+            replayClearAllAircraft();
+            replayFrames = frames;
+            replayFrameTimes = frames.map(function(f) { return f.t; });
+            if (frames.length === 0) {
+                $loading.style.display = 'flex';
+                $loadText.textContent = 'No data for this time range';
+                $loadProg.textContent = 'Try selecting a different range or date';
+                return;
+            }
+            replayApplyRange();
+            replayTogglePlay();
+        }
+
+        // ── Data Loading (NDJSON stream) ──
+        async function replayLoadFromURL(url) {
+            // Reset state
+            replayClearAllAircraft();
+            replayFrames = [];
+            replayFrameTimes = [];
+            replayFrameIndex = 0;
+            replayAccumTime = 0;
+            replayPlaying = false;
+            $btnPlay.textContent = PLAY_SYMBOL;
+            if (replayAnimId) { cancelAnimationFrame(replayAnimId); replayAnimId = null; }
+
+            $loading.style.display = 'flex';
+            $loadBar.style.width = '0%';
+            $loadText.textContent = 'Querying database...';
+            $loadProg.textContent = 'This may take a minute';
+
+            // Elapsed timer so user knows it's not frozen
+            var loadStart = Date.now();
+            var loadTimer = setInterval(function() {
+                var elapsed = Math.round((Date.now() - loadStart) / 1000);
+                var min = Math.floor(elapsed / 60);
+                var sec = elapsed % 60;
+                var timeStr = min > 0 ? min + 'm ' + sec + 's' : sec + 's';
+                if (replayFrames.length === 0) {
+                    $loadProg.textContent = 'Waiting for data... ' + timeStr;
+                }
+            }, 1000);
+
+            try {
+                var hoursToLoad = replayRange > 0 ? Math.ceil(replayRange / 3600) : 24;
+                var response = await fetch(url);
+                if (!response.ok) { clearInterval(loadTimer); throw new Error('Failed to load'); }
+
+                var reader = response.body.getReader();
+                var decoder = new TextDecoder();
+                var buffer = '';
+                var frameCount = 0;
+                var estTotal = Math.round((hoursToLoad * 3600) / replayBucket);
+
+                while (true) {
+                    var chunk = await reader.read();
+                    if (chunk.done) break;
+                    buffer += decoder.decode(chunk.value, { stream: true });
+
+                    var newlineIdx;
+                    while ((newlineIdx = buffer.indexOf('\n')) >= 0) {
+                        var line = buffer.slice(0, newlineIdx).trim();
+                        buffer = buffer.slice(newlineIdx + 1);
+                        if (line) {
+                            try {
+                                var frame = JSON.parse(line);
+                                replayFrames.push(frame);
+                                replayFrameTimes.push(frame.t);
+                                frameCount++;
+                                if (frameCount === 1) {
+                                    $loadText.textContent = 'Streaming frames...';
+                                }
+                                if (frameCount % 10 === 0 || frameCount === 1) {
+                                    var pct = Math.min(99, Math.round((frameCount / estTotal) * 100));
+                                    $loadBar.style.width = pct + '%';
+                                    $loadProg.textContent = frameCount + ' / ~' + estTotal + ' frames (' + pct + '%)';
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+
+                clearInterval(loadTimer);
+
+                if (replayFrames.length === 0) {
+                    $loadText.textContent = 'No data for this date/range';
+                    $loadProg.textContent = 'Try selecting a different date';
+                    return;
+                }
+
+                $loading.style.display = 'none';
+                $loadProg.textContent = frameCount + ' frames loaded';
+
+                // Apply time range window then auto-play
+                replayApplyRange();
+                replayTogglePlay();
+
+            } catch (err) {
+                clearInterval(loadTimer);
+                $loadText.textContent = 'Error loading data';
+                $loadProg.textContent = err.message;
+            }
+        }
+
+        async function replayLoadDate(dateStr) {
+            $dateText.textContent = dateStr;
+            var LOGGER_PORT = window.FEEDER_CONFIG?.loggerPort || 8082;
+            var hoursToLoad = replayRange > 0 ? Math.ceil(replayRange / 3600) : 24;
+            var url = 'http://' + location.hostname + ':' + LOGGER_PORT +
+                '/api/replay/frames?date=' + encodeURIComponent(dateStr) +
+                '&bucket=' + replayBucket + '&hours=' + hoursToLoad;
+            await replayLoadFromURL(url);
+        }
+
+        // ── Activity Heatmap on Scrubber ──
+        function replayDrawActivity() {
+            var canvas = $activityCanvas;
+            var wrap = document.getElementById('replay-scrubber-wrap');
+            if (!canvas || !wrap || replayFrames.length === 0) return;
+            var w = wrap.offsetWidth;
+            var h = 30; // match canvas CSS height
+            var dpr = window.devicePixelRatio || 1;
+            canvas.width = w * dpr;
+            canvas.height = h * dpr;
+            canvas.style.width = w + 'px';
+            canvas.style.height = h + 'px';
+            var ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, w, h);
+
+            // Count aircraft per frame
+            var counts = new Array(replayFrames.length);
+            var maxCount = 0;
+            for (var i = 0; i < replayFrames.length; i++) {
+                counts[i] = replayFrames[i].a.length;
+                if (counts[i] > maxCount) maxCount = counts[i];
+            }
+            if (maxCount === 0) return;
+
+            // Draw bars
+            var barWidth = Math.max(1, w / replayFrames.length);
+            for (var i = 0; i < replayFrames.length; i++) {
+                var ratio = counts[i] / maxCount;
+                var barH = ratio * (h - 2);
+                var x = (i / replayFrames.length) * w;
+                var alpha = 0.15 + ratio * 0.55;
+                ctx.fillStyle = 'rgba(102, 126, 234, ' + alpha + ')';
+                ctx.fillRect(x, h - barH, Math.ceil(barWidth), barH);
+            }
+
+            // Draw time ticks
+            var ticksEl = document.getElementById('replay-time-ticks');
+            if (!ticksEl) return;
+            ticksEl.innerHTML = '';
+            var totalFrames = replayFrames.length;
+            var startTs = replayFrameTimes[0];
+            var endTs = replayFrameTimes[totalFrames - 1];
+            var span = endTs - startTs;
+            if (span <= 0) return;
+
+            // Pick tick interval: aim for ~6-10 labels
+            var intervals = [300, 600, 900, 1800, 3600, 7200, 10800, 21600];
+            var tickInterval = 3600;
+            for (var k = 0; k < intervals.length; k++) {
+                if (span / intervals[k] <= 10) { tickInterval = intervals[k]; break; }
+            }
+
+            // First tick aligned to interval
+            var firstTick = Math.ceil(startTs / tickInterval) * tickInterval;
+            for (var ts = firstTick; ts <= endTs; ts += tickInterval) {
+                var pct = ((ts - startTs) / span) * 100;
+                if (pct < 2 || pct > 98) continue; // skip edges
+                var d = new Date(ts * 1000);
+                var label = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+                var tick = document.createElement('span');
+                tick.textContent = label;
+                tick.style.left = pct + '%';
+                ticksEl.appendChild(tick);
+            }
+        }
+
+        // ── Time Range Window ──
+        function replayApplyRange() {
+            if (replayFrames.length === 0) return;
+
+            replayStartTime = replayFrameTimes[0];
+            replayEndTime = replayFrameTimes[replayFrameTimes.length - 1];
+            replayFrameIndex = 0;
+            replayCurrentTime = replayStartTime;
+            replayAccumTime = 0;
+
+            $scrubber.min = 0;
+            $scrubber.max = replayFrames.length - 1;
+            $scrubber.value = 0;
+
+            replayClearAllAircraft();
+            replayBuildFilters();
+            replayDrawActivity();
+            replayRenderFrame(0);
+            replayUpdateTimeDisplay();
+        }
+
+        // ── Animation Engine (timelapse: step through frames) ──
+        function replayTick(realTimestamp) {
+            if (!replayPlaying) return;
+
+            if (replayLastRealTime !== null && replayFrames.length > 1) {
+                // Live dwell: hold on last frame, then loop
+                if (replayLiveDwelling) {
+                    if (realTimestamp - replayLiveDwellStart >= LIVE_DWELL_MS) {
+                        replayLiveDwelling = false;
+                        replayClearAllAircraft();
+                        if (replayLiveHours > 0) {
+                            var cutoff = replayFrameTimes[replayFrameTimes.length - 1] - (replayLiveHours * 3600);
+                            while (replayFrames.length > 0 && replayFrameTimes[0] < cutoff) {
+                                replayFrames.shift();
+                                replayFrameTimes.shift();
+                            }
+                            $scrubber.max = replayFrames.length - 1;
+                        }
+                        replayFrameIndex = 0;
+                        replayAccumTime = 0;
+                        replayLastRealTime = realTimestamp;
+                        replayAnimId = requestAnimationFrame(replayTick);
+                        return;
+                    }
+                    // Still dwelling — keep rendering last frame, update display
+                    replayLastRealTime = realTimestamp;
+                    replayAnimId = requestAnimationFrame(replayTick);
+                    return;
+                }
+
+                var deltaMs = realTimestamp - replayLastRealTime;
+                var msPerFrame = (replayLoopDuration * 1000) / replayFrames.length;
+                replayAccumTime += deltaMs;
+
+                // Advance frames when enough time has accumulated
+                var stepped = false;
+                while (replayAccumTime >= msPerFrame) {
+                    replayAccumTime -= msPerFrame;
+                    replayFrameIndex++;
+                    stepped = true;
+
+                    // Handle end of frames
+                    if (replayFrameIndex >= replayFrames.length) {
+                        if (replayLoop) {
+                            // In live mode, dwell on the last frame for 15s before looping
+                            if (replayLive && !replayLiveDwelling) {
+                                replayFrameIndex = replayFrames.length - 1;
+                                replayLiveDwelling = true;
+                                replayLiveDwellStart = realTimestamp;
+                                replayAccumTime = 0;
+                                break;
+                            }
+                            replayClearAllAircraft();
+                            if (replayLive && replayLiveHours > 0) {
+                                var cutoff = replayFrameTimes[replayFrameTimes.length - 1] - (replayLiveHours * 3600);
+                                while (replayFrames.length > 0 && replayFrameTimes[0] < cutoff) {
+                                    replayFrames.shift();
+                                    replayFrameTimes.shift();
+                                }
+                                $scrubber.max = replayFrames.length - 1;
+                                replayLiveDwelling = false;
+                            }
+                            replayFrameIndex = 0;
+                            replayAccumTime = 0;
+                        } else {
+                            replayFrameIndex = replayFrames.length - 1;
+                            replayPlaying = false;
+                            $btnPlay.textContent = PLAY_SYMBOL;
+                            replayLastRealTime = null;
+                            replayCurrentTime = replayFrameTimes[replayFrameIndex];
+                            replayRenderFrame(replayFrameIndex);
+                            replayUpdateTimeDisplay();
+                            $scrubber.value = replayFrameIndex;
+                            return;
+                        }
+                    }
+                }
+
+                if (stepped) {
+                    replayCurrentTime = replayFrameTimes[replayFrameIndex];
+                    replayRenderFrame(replayFrameIndex);
+                    replayUpdateTimeDisplay();
+                    $scrubber.value = replayFrameIndex;
+                }
+            }
+
+            replayLastRealTime = realTimestamp;
+            replayAnimId = requestAnimationFrame(replayTick);
+        }
+
+        function replayRenderFrame(frameIdx) {
+            if (frameIdx < 0 || frameIdx >= replayFrames.length) return;
+
+            var frame = replayFrames[frameIdx];
+            var activeIcaos = new Set();
+
+            for (var i = 0; i < frame.a.length; i++) {
+                var ac = frame.a[i];
+                var icao = ac[0], callsign = ac[1], lat = ac[2], lon = ac[3];
+                var alt = ac[4], trk = ac[5], spd = ac[6], type = ac[7], category = ac[8];
+
+                // Skip filtered aircraft
+                if (replayIsFiltered(type, category)) continue;
+
+                activeIcaos.add(icao);
+                replayLastSeen[icao] = frameIdx;
+
+                // Build aircraft-like object for existing icon functions
+                var acObj = {
+                    hex: icao,
+                    flight: callsign || '',
+                    track: trk,
+                    alt_baro: alt,
+                    t: type,
+                    category: category
+                };
+
+                var pos = [lat, lon];
+
+                if (replayMarkers[icao]) {
+                    replayMarkers[icao].marker.setLatLng(pos);
+                    replayMarkers[icao].marker.setIcon(createAircraftDivIcon(acObj));
+                    replayMarkers[icao].label.setLatLng(pos);
+                    replayMarkers[icao].label.setIcon(createAircraftLabel(acObj));
+                    replayMarkers[icao].data = acObj;
+                    replayMarkers[icao].spd = spd;
+                } else {
+                    var marker = L.marker(pos, {
+                        icon: createAircraftDivIcon(acObj),
+                        interactive: true,
+                        zIndexOffset: 1000
+                    }).addTo(replayMap);
+                    var label = L.marker(pos, {
+                        icon: createAircraftLabel(acObj),
+                        interactive: false
+                    }).addTo(replayMap);
+                    replayMarkers[icao] = { marker: marker, label: label, data: acObj, spd: spd };
+                    marker.on('click', (function(mIcao) {
+                        return function() { replayShowPopup(mIcao); };
+                    })(icao));
+                }
+
+                // Trail tracking
+                if (replayShowTrails) {
+                    if (!replayPositions[icao]) replayPositions[icao] = [];
+                    var pts = replayPositions[icao];
+                    if (pts.length === 0 || getDistanceKm(pts[pts.length-1][0], pts[pts.length-1][1], lat, lon) > 0.05) {
+                        pts.push([lat, lon, alt]);
+                        if (pts.length > TRAIL_MAX) pts.shift();
+                    }
+                    if (!replayTrails[icao]) {
+                        replayTrails[icao] = L.layerGroup().addTo(replayMap);
+                    }
+                    updateAltitudeTrail(icao, replayTrails[icao], replayPositions);
+                }
+            }
+
+            // Fade and remove stale aircraft (frame-based)
+            var visibleCount = 0;
+            var markerIcaos = Object.keys(replayMarkers);
+            for (var j = 0; j < markerIcaos.length; j++) {
+                var staleIcao = markerIcaos[j];
+                var framesSince = frameIdx - (replayLastSeen[staleIcao] || 0);
+                var mEl = replayMarkers[staleIcao].marker.getElement();
+                var lEl = replayMarkers[staleIcao].label.getElement();
+
+                if (activeIcaos.has(staleIcao)) {
+                    if (mEl) mEl.style.opacity = '1';
+                    if (lEl) lEl.style.opacity = '1';
+                    visibleCount++;
+                } else if (framesSince <= STALE_FADE_FRAMES) {
+                    var opacity = Math.max(0, 1 - (framesSince / STALE_FADE_FRAMES));
+                    var opStr = String(opacity.toFixed(2));
+                    if (mEl) mEl.style.opacity = opStr;
+                    if (lEl) lEl.style.opacity = opStr;
+                    if (replayTrails[staleIcao]) {
+                        replayTrails[staleIcao].eachLayer(function(l) {
+                            l.setStyle({opacity: opacity * 0.8});
+                        });
+                    }
+                    if (opacity > 0.05) visibleCount++;
+                } else {
+                    replayMap.removeLayer(replayMarkers[staleIcao].marker);
+                    replayMap.removeLayer(replayMarkers[staleIcao].label);
+                    delete replayMarkers[staleIcao];
+                    if (replayTrails[staleIcao]) {
+                        replayMap.removeLayer(replayTrails[staleIcao]);
+                        delete replayTrails[staleIcao];
+                    }
+                    delete replayPositions[staleIcao];
+                    delete replayLastSeen[staleIcao];
+                }
+            }
+
+            $acCount.textContent = visibleCount + ' aircraft';
+        }
+
+        // ── Time Display ──
+        function replayUpdateTimeDisplay() {
+            var d = new Date(replayCurrentTime * 1000);
+            var mon = String(d.getMonth() + 1).padStart(2, '0');
+            var day = String(d.getDate()).padStart(2, '0');
+            var hh = String(d.getHours()).padStart(2, '0');
+            var mm = String(d.getMinutes()).padStart(2, '0');
+            var ss = String(d.getSeconds()).padStart(2, '0');
+            $timeText.textContent = mon + '/' + day + ' ' + hh + ':' + mm + ':' + ss;
+        }
+
+        // ── Playback Controls ──
+        function replayTogglePlay() {
+            replayPlaying = !replayPlaying;
+            $btnPlay.textContent = replayPlaying ? PAUSE_SYMBOL : PLAY_SYMBOL;
+            if (replayPlaying) {
+                // If at end, restart
+                if (replayFrameIndex >= replayFrames.length - 1) {
+                    replayClearAllAircraft();
+                    replayFrameIndex = 0;
+                    replayAccumTime = 0;
+                    replayCurrentTime = replayFrameTimes[0];
+                }
+                replayLastRealTime = null;
+                replayAccumTime = 0;
+                replayAnimId = requestAnimationFrame(replayTick);
+            } else {
+                replayLastRealTime = null;
+                if (replayAnimId) { cancelAnimationFrame(replayAnimId); replayAnimId = null; }
+            }
+        }
+
+        function replayScrub() {
+            replayFrameIndex = parseInt($scrubber.value);
+            replayCurrentTime = replayFrameTimes[replayFrameIndex] || replayStartTime;
+            replayClearAllAircraft();
+            // Backfill previous frames to rebuild trails
+            var backfill = Math.min(20, replayFrameIndex);
+            for (var b = replayFrameIndex - backfill; b < replayFrameIndex; b++) {
+                replayRenderFrame(b);
+            }
+            replayRenderFrame(replayFrameIndex);
+            replayUpdateTimeDisplay();
+            replayLastRealTime = null;
+            replayAccumTime = 0;
+        }
+
+        function replayAutoSpeed(rangeSeconds) {
+            var ideal;
+            if (rangeSeconds <= 0) { ideal = 60; }
+            else {
+                var hours = rangeSeconds / 3600;
+                ideal = Math.round(Math.min(60, Math.max(5, 5 + (hours - 1) * (55 / 23))));
+            }
+            var options = [5, 10, 15, 30, 60];
+            var best = options[0];
+            for (var i = 1; i < options.length; i++) {
+                if (Math.abs(options[i] - ideal) < Math.abs(best - ideal)) best = options[i];
+            }
+            return best;
+        }
+
+        function replayToggleLoop() {
+            replayLoop = !replayLoop;
+            $btnLoop.classList.toggle('active', replayLoop);
+        }
+
+        function replayTogglePrivacy() {
+            replayPrivacy = !replayPrivacy;
+            localStorage.setItem('easyadsb-privacy', String(replayPrivacy));
+            $btnPrivacy.classList.toggle('active', replayPrivacy);
+            if (replayPrivacy) {
+                if (replayReceiverMarker) replayMap.removeLayer(replayReceiverMarker);
+            } else {
+                if (replayReceiverMarker) replayReceiverMarker.addTo(replayMap);
+            }
+            replayUpdateURL();
+        }
+
+        // ── Live Loop Mode ──
+        function replayGoLive() {
+            var LOGGER_PORT = window.FEEDER_CONFIG?.loggerPort || 8082;
+            replayLive = !replayLive;
+            $btnLive.classList.toggle('active', replayLive);
+
+            if (replayLive) {
+                // Best defaults for weather radar loop: 3hr, 15s, 5s bucket
+                replayRange = 10800; $range.value = '10800';
+                replayLoopDuration = 15; $speed.value = '15';
+                replayBucket = 5; $bucket.value = '5';
+                replayLiveHours = 3;
+                replayLoop = true;
+                $btnLoop.classList.add('active');
+
+                var url = 'http://' + location.hostname + ':' + LOGGER_PORT +
+                    '/api/replay/frames?live=true&hours=' + replayLiveHours +
+                    '&bucket=' + replayBucket;
+                $dateText.textContent = 'LIVE';
+                replayLoadFromURL(url);
+
+                replayLivePollTimer = setInterval(replayLivePoll, LIVE_POLL_INTERVAL);
+            } else {
+                if (replayLivePollTimer) {
+                    clearInterval(replayLivePollTimer);
+                    replayLivePollTimer = null;
+                }
+            }
+            replayUpdateURL();
+        }
+
+        function replayLivePoll() {
+            if (!replayLive || replayFrames.length === 0) return;
+            var LOGGER_PORT = window.FEEDER_CONFIG?.loggerPort || 8082;
+            var lastTs = replayFrameTimes[replayFrameTimes.length - 1];
+            var url = 'http://' + location.hostname + ':' + LOGGER_PORT +
+                '/api/replay/frames/since?after=' + lastTs + '&bucket=' + replayBucket;
+
+            fetch(url)
+                .then(function(r) { return r.text(); })
+                .then(function(text) {
+                    var lines = text.trim().split('\n').filter(Boolean);
+                    var added = 0;
+                    for (var i = 0; i < lines.length; i++) {
+                        try {
+                            var frame = JSON.parse(lines[i]);
+                            if (frame.t > lastTs) {
+                                replayFrames.push(frame);
+                                replayFrameTimes.push(frame.t);
+                                added++;
+                            }
+                        } catch (e) {}
+                    }
+                    if (added > 0) {
+                        if (!replayIsScrubbing) {
+                            $scrubber.max = replayFrames.length - 1;
+                        }
+                        // Trim to MAX_LIVE_FRAMES
+                        if (replayFrames.length > MAX_LIVE_FRAMES) {
+                            var excess = replayFrames.length - MAX_LIVE_FRAMES;
+                            replayFrames.splice(0, excess);
+                            replayFrameTimes.splice(0, excess);
+                            replayFrameIndex = Math.max(0, replayFrameIndex - excess);
+                            $scrubber.max = replayFrames.length - 1;
+                            if (!replayIsScrubbing) {
+                                $scrubber.value = replayFrameIndex;
+                            }
+                        }
+                        replayDrawActivity();
+                    }
+                })
+                .catch(function(e) { console.warn('Live poll error:', e); });
+        }
+
+        function replayToggleTrails() {
+            replayShowTrails = !replayShowTrails;
+            $btnTrails.classList.toggle('active', replayShowTrails);
+            if (!replayShowTrails) {
+                var trailIcaos = Object.keys(replayTrails);
+                for (var k = 0; k < trailIcaos.length; k++) {
+                    replayMap.removeLayer(replayTrails[trailIcaos[k]]);
+                }
+                replayTrails = {};
+                replayPositions = {};
+            } else {
+                // Re-render current frame to rebuild trails
+                replayRenderFrame(replayFrameIndex);
+            }
+        }
+
+        // ── Filter Logic ──
+        function replayBuildFilters() {
+            replayAllTypes = {};
+            replayFilterCats = {};
+            replayFilterTypes = {};
+
+            // Scan all frames for unique types
+            for (var f = 0; f < replayFrames.length; f++) {
+                var acList = replayFrames[f].a;
+                for (var i = 0; i < acList.length; i++) {
+                    var type = acList[i][7] || 'Unknown';
+                    var cat = acList[i][8] || null;
+                    var iconCat = getAircraftSVGType(type === 'Unknown' ? null : type, cat);
+                    if (!replayAllTypes[type]) {
+                        replayAllTypes[type] = { count: 0, cat: iconCat };
+                    }
+                    replayAllTypes[type].count++;
+                }
+            }
+
+            // Initialize all filters to visible
+            var catSet = {};
+            var types = Object.keys(replayAllTypes).sort();
+            for (var t = 0; t < types.length; t++) {
+                replayFilterTypes[types[t]] = true;
+                catSet[replayAllTypes[types[t]].cat] = true;
+            }
+            var cats = Object.keys(catSet).sort();
+            for (var c = 0; c < cats.length; c++) {
+                replayFilterCats[cats[c]] = true;
+            }
+
+            replayRenderFilters();
+        }
+
+        function replayRenderFilters() {
+            // Category buttons
+            var catHtml = '';
+            var cats = Object.keys(replayFilterCats).sort();
+            for (var c = 0; c < cats.length; c++) {
+                var cat = cats[c];
+                var label = CAT_LABELS[cat] || cat;
+                // Count types in this category
+                var count = 0;
+                var types = Object.keys(replayAllTypes);
+                for (var t = 0; t < types.length; t++) {
+                    if (replayAllTypes[types[t]].cat === cat) count++;
+                }
+                var cls = replayFilterCats[cat] ? 'replay-filter-cat' : 'replay-filter-cat off';
+                catHtml += '<span class="' + cls + '" data-cat="' + cat + '">' + label + ' (' + count + ')</span>';
+            }
+            $filterCats.innerHTML = catHtml;
+
+            // Wire category clicks
+            var catBtns = $filterCats.querySelectorAll('.replay-filter-cat');
+            for (var i = 0; i < catBtns.length; i++) {
+                catBtns[i].addEventListener('click', function() {
+                    var cat = this.getAttribute('data-cat');
+                    replayFilterCats[cat] = !replayFilterCats[cat];
+                    // Update all types in this category
+                    var types = Object.keys(replayAllTypes);
+                    for (var t = 0; t < types.length; t++) {
+                        if (replayAllTypes[types[t]].cat === cat) {
+                            replayFilterTypes[types[t]] = replayFilterCats[cat];
+                        }
+                    }
+                    replayRenderFilters();
+                    replayClearAllAircraft();
+                    replayRenderFrame(replayFrameIndex);
+                });
+            }
+
+            // Type pills
+            var typeHtml = '';
+            var sortedTypes = Object.keys(replayAllTypes).sort(function(a, b) {
+                return replayAllTypes[b].count - replayAllTypes[a].count;
+            });
+            for (var j = 0; j < sortedTypes.length; j++) {
+                var tp = sortedTypes[j];
+                var cls2 = replayFilterTypes[tp] ? 'replay-filter-type' : 'replay-filter-type off';
+                typeHtml += '<span class="' + cls2 + '" data-type="' + tp + '">' + tp + '</span>';
+            }
+            $filterTypes.innerHTML = typeHtml;
+
+            // Wire type clicks
+            var typeBtns = $filterTypes.querySelectorAll('.replay-filter-type');
+            for (var k = 0; k < typeBtns.length; k++) {
+                typeBtns[k].addEventListener('click', function() {
+                    var tp = this.getAttribute('data-type');
+                    replayFilterTypes[tp] = !replayFilterTypes[tp];
+                    replayRenderFilters();
+                    replayClearAllAircraft();
+                    replayRenderFrame(replayFrameIndex);
+                });
+            }
+        }
+
+        function replayIsFiltered(type, category) {
+            var t = type || 'Unknown';
+            if (replayFilterTypes[t] === false) return true;
+            return false;
+        }
+
+        function replayShowPopup(icao) {
+            var entry = replayMarkers[icao];
+            if (!entry) return;
+            var ac = entry.data;
+            var spd = entry.spd;
+            var flag = typeof getCountryFlag === 'function' ? getCountryFlag(icao) : '';
+            var callsign = ac.flight || icao.toUpperCase();
+            var altStr = ac.alt_baro ? Math.round(ac.alt_baro).toLocaleString() + ' ft' : '—';
+            var spdStr = spd && typeof formatSpeed === 'function' ? formatSpeed(Math.round(spd)) : (spd ? Math.round(spd) + ' kt' : '—');
+            var hdgStr = ac.track !== null && ac.track !== undefined ? Math.round(ac.track) + '\u00B0' : '—';
+            var typeStr = ac.t || '—';
+
+            // Check aircraft DB for registration
+            var reg = '';
+            if (typeof aircraftDbCache !== 'undefined') {
+                var prefix = icao.substring(0, 2).toUpperCase();
+                var suffix = icao.substring(2).toUpperCase();
+                var db = aircraftDbCache[prefix];
+                if (db && db[suffix] && db[suffix][0]) reg = db[suffix][0];
+            }
+
+            var html = '<div style="font-size:13px;line-height:1.6;min-width:180px;">' +
+                '<div style="font-weight:700;font-size:15px;margin-bottom:4px;">' + flag + ' ' + callsign + '</div>' +
+                (reg ? '<div style="color:#aaa;font-size:12px;">' + reg + '</div>' : '') +
+                '<div style="color:#667eea;font-size:12px;margin-bottom:6px;">' + typeStr + ' &middot; ' + icao.toUpperCase() + '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">' +
+                '<div><span style="color:#aaa;">Alt:</span> ' + altStr + '</div>' +
+                '<div><span style="color:#aaa;">Spd:</span> ' + spdStr + '</div>' +
+                '<div><span style="color:#aaa;">Hdg:</span> ' + hdgStr + '</div>' +
+                '</div>' +
+                '<div style="margin-top:8px;font-size:11px;display:flex;gap:8px;">' +
+                '<a href="https://globe.adsbexchange.com/?icao=' + icao + '" target="_blank" style="color:#667eea;">ADSBx</a>' +
+                (callsign !== icao.toUpperCase() ? '<a href="https://flightaware.com/live/flight/' + callsign + '" target="_blank" style="color:#667eea;">FlightAware</a>' : '') +
+                '<a href="https://adsb.lol/?icao=' + icao + '" target="_blank" style="color:#667eea;">ADSB.lol</a>' +
+                '</div></div>';
+
+            entry.marker.unbindPopup();
+            entry.marker.bindPopup(html, {
+                className: 'replay-popup',
+                maxWidth: 250,
+                autoPan: false
+            }).openPopup();
+        }
+
+        function replayToggleRange() {
+            replayShowRange = !replayShowRange;
+            $btnRange.classList.toggle('active', replayShowRange);
+            if (replayShowRange) {
+                fetch('/tar1090-data/outline.json')
+                    .then(function(r) { return r.ok ? r.json() : null; })
+                    .then(function(data) {
+                        if (!data) return;
+                        var points = data.actualRange && data.actualRange.last24h && data.actualRange.last24h.points;
+                        if (points && points.length > 0) {
+                            if (replayRangePolygon) replayMap.removeLayer(replayRangePolygon);
+                            var latlngs = points.map(function(p) { return [p[0], p[1]]; });
+                            replayRangePolygon = L.polygon(latlngs, {
+                                color: '#22c55e', weight: 2, opacity: 0.6,
+                                fillColor: '#22c55e', fillOpacity: 0.08,
+                                dashArray: '4, 4'
+                            }).addTo(replayMap);
+                            replayRangePolygon.bringToBack();
+                            replayRangePolygon.bindTooltip('24h Reception Range', { sticky: true });
+                        }
+                    }).catch(function() {});
+            } else if (replayRangePolygon) {
+                replayMap.removeLayer(replayRangePolygon);
+                replayRangePolygon = null;
+            }
+        }
+
+        function replayClearAllAircraft() {
+            var clearIcaos = Object.keys(replayMarkers);
+            for (var k = 0; k < clearIcaos.length; k++) {
+                replayMap.removeLayer(replayMarkers[clearIcaos[k]].marker);
+                replayMap.removeLayer(replayMarkers[clearIcaos[k]].label);
+            }
+            var trailIcaos = Object.keys(replayTrails);
+            for (var k = 0; k < trailIcaos.length; k++) {
+                replayMap.removeLayer(replayTrails[trailIcaos[k]]);
+            }
+            replayMarkers = {};
+            replayTrails = {};
+            replayPositions = {};
+            replayLastSeen = {};
+        }
+
+        // ── KML Export ──
+        function escapeXml(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function replayExportKML() {
+            if (replayFrames.length === 0) return;
+
+            var tracks = {};
+            for (var f = 0; f < replayFrames.length; f++) {
+                var frame = replayFrames[f];
+                var acList = frame.a;
+                for (var i = 0; i < acList.length; i++) {
+                    var ac = acList[i];
+                    var icao = ac[0];
+                    var type = ac[7] || 'Unknown';
+                    var cat = ac[8] || null;
+                    if (replayIsFiltered(type, cat)) continue;
+                    if (!tracks[icao]) {
+                        tracks[icao] = { callsign: ac[1] || icao, type: type, cat: cat || '', positions: [] };
+                    }
+                    if (ac[1]) tracks[icao].callsign = ac[1];
+                    tracks[icao].positions.push({
+                        t: frame.t, lat: ac[2], lon: ac[3],
+                        alt: Math.round((ac[4] || 0) * 0.3048)
+                    });
+                }
+            }
+
+            var dateStr = $datePicker.value || 'unknown';
+            var rangeLabel = replayRange > 0 ? Math.ceil(replayRange / 3600) + 'h' : 'full';
+            var kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+            kml += '<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">\n';
+            kml += '<Document>\n';
+            kml += '  <name>EasyADSB Replay \u2014 ' + escapeXml(dateStr) + ' (' + rangeLabel + ')</name>\n';
+
+            var icaos = Object.keys(tracks);
+            for (var k = 0; k < icaos.length; k++) {
+                var icao = icaos[k];
+                var trk = tracks[icao];
+                kml += '  <Folder>\n';
+                kml += '    <name>' + escapeXml(icao) + ' (' + escapeXml(trk.callsign) + ')</name>\n';
+                kml += '    <Placemark>\n';
+                kml += '      <name>' + escapeXml(trk.callsign) + '</name>\n';
+                kml += '      <description>Type: ' + escapeXml(trk.type) + ', Category: ' + escapeXml(trk.cat) + '</description>\n';
+                kml += '      <gx:Track>\n';
+                kml += '        <altitudeMode>absolute</altitudeMode>\n';
+                for (var p = 0; p < trk.positions.length; p++) {
+                    var pos = trk.positions[p];
+                    var dt = new Date(pos.t * 1000).toISOString();
+                    kml += '        <when>' + dt + '</when>\n';
+                    kml += '        <gx:coord>' + pos.lon + ' ' + pos.lat + ' ' + pos.alt + '</gx:coord>\n';
+                }
+                kml += '      </gx:Track>\n';
+                kml += '    </Placemark>\n';
+                kml += '  </Folder>\n';
+            }
+
+            kml += '</Document>\n</kml>\n';
+
+            var blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml'});
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'easyadsb-' + dateStr + '-' + rangeLabel + '.kml';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // ── URL State ──
+        function replayUpdateURL() {
+            var params = new URLSearchParams(window.location.search);
+            params.set('replay', 'true');
+            if (replayLive) {
+                params.set('live', 'true');
+                params.set('hours', String(replayLiveHours));
+                params.delete('date');
+            } else {
+                params.delete('live');
+                params.delete('hours');
+                if ($datePicker.value) params.set('date', $datePicker.value);
+            }
+            params.set('speed', String(replayLoopDuration));
+            params.set('bucket', String(replayBucket));
+            params.set('range', String(replayRange));
+            if (replayPrivacy) params.set('privacy', 'true');
+            else params.delete('privacy');
+            history.replaceState(null, '', '?' + params.toString());
+        }
+
+    })();
+    }
     </script>
 </body>
 </html>
