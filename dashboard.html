@@ -22,7 +22,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EasyADSB Dashboard v1.3.0</title>
+    <title>EasyADSB Dashboard v1.4.1</title>
     <!-- Leaflet CSS/JS for custom map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1861,7 +1861,7 @@
             <div class="section-header" onclick="toggleSection('feeders-section')">
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <h2 style="margin: 0;">📡 Feed Status</h2>
-                    <span class="section-summary no-bg" id="feeders-summary" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <span class="section-summary no-bg" id="feeders-summary" style="gap: 6px; flex-wrap: wrap;">
                         <span class="feed-status-pill" title="Local Map"><span class="status-dot-sm online"></span>Map</span>
                         <span class="feed-status-pill" title="ADSBexchange"><span class="status-dot-sm online"></span>ADSBx</span>
                         <span class="feed-status-pill" title="ADSB.lol"><span class="status-dot-sm online"></span>ADSB.lol</span>
@@ -2142,8 +2142,8 @@
                     <button class="collapse-btn">▶</button>
                 </div>
             </div>
-            
-            <div class="section-content">
+
+            <div class="section-content collapsed">
             <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 15px;">
                 Keep these handy for linking accounts and troubleshooting
             </div>
@@ -2708,7 +2708,7 @@
 
         <!-- Version Footer -->
         <div class="footer">
-            EasyADSB <span id="footer-version">v1.3.2</span> | 
+            EasyADSB <span id="footer-version">v1.4.1</span> |
             <a href="https://github.com/datboip/easyadsb" target="_blank">⭐ GitHub</a> | 
             Built with <a href="https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder" target="_blank">ultrafeeder</a>
         </div>
@@ -6187,7 +6187,7 @@
         // Check for updates
         async function checkForUpdates() {
             // Fetch current version from logger API
-            let CURRENT_VERSION = '1.3.0';
+            let CURRENT_VERSION = '1.4.1';
             try {
                 const sysResponse = await fetch(`http://${location.hostname}:${LOGGER_PORT}/api/system`);
                 if (sysResponse.ok) {
@@ -6270,7 +6270,7 @@
                 content.style.maxHeight = content.scrollHeight + 'px';
                 card.classList.remove('section-collapsed');
                 if (btn) btn.textContent = '▼';
-                collapsedSections[sectionId] = false;
+                delete collapsedSections[sectionId];
             } else {
                 // Collapse
                 content.style.maxHeight = content.scrollHeight + 'px';
@@ -6286,21 +6286,31 @@
         }
         
         function initCollapsibleSections() {
-            // Apply saved collapsed state
-            Object.keys(collapsedSections).forEach(sectionId => {
-                if (collapsedSections[sectionId]) {
-                    const card = document.getElementById(sectionId);
-                    if (card) {
-                        const content = card.querySelector('.section-content');
-                        const btn = card.querySelector('.collapse-btn');
-                        if (content) {
-                            content.classList.add('collapsed');
-                            card.classList.add('section-collapsed');
-                            if (btn) btn.textContent = '▶';
-                        }
-                    }
-                }
+            // Sync content div with any HTML-default collapsed sections
+            document.querySelectorAll('.card.section-collapsed').forEach(card => {
+                const content = card.querySelector('.section-content');
+                if (content) content.classList.add('collapsed');
             });
+
+            // Apply saved collapsed state from localStorage (only has true entries)
+            Object.keys(collapsedSections).forEach(sectionId => {
+                if (!collapsedSections[sectionId]) return;
+                const card = document.getElementById(sectionId);
+                if (!card) return;
+                const content = card.querySelector('.section-content');
+                const btn = card.querySelector('.collapse-btn');
+                if (!content) return;
+                content.classList.add('collapsed');
+                card.classList.add('section-collapsed');
+                if (btn) btn.textContent = '▶';
+            });
+
+            // Clean up any stale false entries from older versions
+            let cleaned = false;
+            Object.keys(collapsedSections).forEach(k => {
+                if (!collapsedSections[k]) { delete collapsedSections[k]; cleaned = true; }
+            });
+            if (cleaned) localStorage.setItem('collapsedSections', JSON.stringify(collapsedSections));
         }
         
         // Initialize collapsible sections after DOM ready
@@ -8008,33 +8018,35 @@
         .replay-preset { min-width: 32px; font-size: 12px; }
         .replay-preset.active { background: rgba(102,126,234,0.5); }
         #replay-scrubber-wrap {
-            flex: 1; position: relative; height: 44px;
+            flex: 1; position: relative; height: 24px; margin-bottom: 2px;
         }
         #replay-activity-canvas {
-            position: absolute; left: 0; top: 0; width: 100%; height: 30px;
-            border-radius: 4px; pointer-events: none; opacity: 0.6;
+            position: absolute; left: 0; top: 0; width: 100%; height: 22px;
+            border-radius: 3px; pointer-events: none; opacity: 0.6;
         }
         #replay-scrubber {
-            position: absolute; left: 0; top: 0; z-index: 1; width: 100%; height: 30px;
+            position: absolute; left: 0; top: 0; z-index: 1; width: 100%; height: 22px;
             -webkit-appearance: none; appearance: none;
             background: transparent; cursor: pointer; margin: 0;
         }
         #replay-scrubber::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 6px; height: 30px;
-            background: #667eea; border-radius: 2px; cursor: pointer;
-            box-shadow: 0 0 8px rgba(102,126,234,0.7);
+            -webkit-appearance: none; width: 12px; height: 22px;
+            background: #667eea; border-radius: 3px; cursor: pointer;
+            box-shadow: 0 0 6px rgba(102,126,234,0.7);
             border: 1px solid rgba(255,255,255,0.4);
         }
         #replay-scrubber::-moz-range-thumb {
-            width: 6px; height: 30px; border: 1px solid rgba(255,255,255,0.4);
-            background: #667eea; border-radius: 2px; cursor: pointer;
-            box-shadow: 0 0 8px rgba(102,126,234,0.7);
+            width: 12px; height: 22px; border: 1px solid rgba(255,255,255,0.4);
+            background: #667eea; border-radius: 3px; cursor: pointer;
+            box-shadow: 0 0 6px rgba(102,126,234,0.7);
         }
         #replay-scrubber::-webkit-slider-runnable-track {
-            height: 2px; background: rgba(255,255,255,0.15); border-radius: 1px;
+            height: 22px; background: transparent; border-radius: 3px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
         #replay-scrubber::-moz-range-track {
-            height: 2px; background: rgba(255,255,255,0.15); border-radius: 1px;
+            height: 22px; background: transparent; border-radius: 3px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
         #replay-time-ticks {
             position: absolute; left: 0; bottom: 0; width: 100%; height: 14px;
@@ -8325,8 +8337,8 @@
             // Scrub interaction tracking for live mode
             $scrubber.addEventListener('mousedown', function() { replayIsScrubbing = true; });
             $scrubber.addEventListener('mouseup', function() { replayIsScrubbing = false; });
-            $scrubber.addEventListener('touchstart', function() { replayIsScrubbing = true; });
-            $scrubber.addEventListener('touchend', function() { replayIsScrubbing = false; });
+            $scrubber.addEventListener('touchstart', function() { replayIsScrubbing = true; }, { passive: true });
+            $scrubber.addEventListener('touchend', function() { replayIsScrubbing = false; }, { passive: true });
             if (replayPrivacy) $btnPrivacy.classList.add('active');
 
             // Read URL params
@@ -8611,7 +8623,7 @@
             var wrap = document.getElementById('replay-scrubber-wrap');
             if (!canvas || !wrap || replayFrames.length === 0) return;
             var w = wrap.offsetWidth;
-            var h = 30; // match canvas CSS height
+            var h = 22; // match canvas CSS height
             var dpr = window.devicePixelRatio || 1;
             canvas.width = w * dpr;
             canvas.height = h * dpr;
@@ -8702,22 +8714,25 @@
                 if (replayLiveDwelling) {
                     if (realTimestamp - replayLiveDwellStart >= LIVE_DWELL_MS) {
                         replayLiveDwelling = false;
+                        replayStopLiveDwell();
                         replayClearAllAircraft();
                         if (replayLiveHours > 0) {
                             var cutoff = replayFrameTimes[replayFrameTimes.length - 1] - (replayLiveHours * 3600);
-                            while (replayFrames.length > 0 && replayFrameTimes[0] < cutoff) {
-                                replayFrames.shift();
-                                replayFrameTimes.shift();
+                            var cutIdx = 0;
+                            while (cutIdx < replayFrames.length && replayFrameTimes[cutIdx] < cutoff) cutIdx++;
+                            if (cutIdx > 0) {
+                                replayFrames.splice(0, cutIdx);
+                                replayFrameTimes.splice(0, cutIdx);
                             }
                             $scrubber.max = replayFrames.length - 1;
                         }
                         replayFrameIndex = 0;
                         replayAccumTime = 0;
-                        replayLastRealTime = realTimestamp;
+                        replayLastRealTime = null;  // Force fresh timing on next tick
                         replayAnimId = requestAnimationFrame(replayTick);
                         return;
                     }
-                    // Still dwelling — keep rendering last frame, update display
+                    // Still dwelling — fetch live aircraft directly for smooth updates
                     replayLastRealTime = realTimestamp;
                     replayAnimId = requestAnimationFrame(replayTick);
                     return;
@@ -8743,14 +8758,18 @@
                                 replayLiveDwelling = true;
                                 replayLiveDwellStart = realTimestamp;
                                 replayAccumTime = 0;
+                                // Start live aircraft fetching during dwell
+                                replayStartLiveDwell();
                                 break;
                             }
                             replayClearAllAircraft();
                             if (replayLive && replayLiveHours > 0) {
                                 var cutoff = replayFrameTimes[replayFrameTimes.length - 1] - (replayLiveHours * 3600);
-                                while (replayFrames.length > 0 && replayFrameTimes[0] < cutoff) {
-                                    replayFrames.shift();
-                                    replayFrameTimes.shift();
+                                var cutIdx = 0;
+                                while (cutIdx < replayFrames.length && replayFrameTimes[cutIdx] < cutoff) cutIdx++;
+                                if (cutIdx > 0) {
+                                    replayFrames.splice(0, cutIdx);
+                                    replayFrameTimes.splice(0, cutIdx);
                                 }
                                 $scrubber.max = replayFrames.length - 1;
                                 replayLiveDwelling = false;
@@ -8990,8 +9009,11 @@
                 $dateText.textContent = 'LIVE';
                 replayLoadFromURL(url);
 
+                if (replayLivePollTimer) clearInterval(replayLivePollTimer);
                 replayLivePollTimer = setInterval(replayLivePoll, LIVE_POLL_INTERVAL);
             } else {
+                replayLiveDwelling = false;
+                replayStopLiveDwell();
                 if (replayLivePollTimer) {
                     clearInterval(replayLivePollTimer);
                     replayLivePollTimer = null;
@@ -9000,8 +9022,10 @@
             replayUpdateURL();
         }
 
+        let replayLivePolling = false;
         function replayLivePoll() {
-            if (!replayLive || replayFrames.length === 0) return;
+            if (!replayLive || replayFrames.length === 0 || replayLivePolling) return;
+            replayLivePolling = true;
             var LOGGER_PORT = window.FEEDER_CONFIG?.loggerPort || 8082;
             var lastTs = replayFrameTimes[replayFrameTimes.length - 1];
             var url = 'http://' + location.hostname + ':' + LOGGER_PORT +
@@ -9040,7 +9064,70 @@
                         replayDrawActivity();
                     }
                 })
-                .catch(function(e) { console.warn('Live poll error:', e); });
+                .catch(function(e) { console.warn('Live poll error:', e); })
+                .finally(function() { replayLivePolling = false; });
+        }
+
+        // ── Live Dwell: fetch aircraft.json directly for smooth real-time updates ──
+        let replayLiveDwellTimer = null;
+        function replayStartLiveDwell() {
+            replayStopLiveDwell();
+            replayFetchLiveAircraft(); // Fetch immediately
+            replayLiveDwellTimer = setInterval(replayFetchLiveAircraft, 2000);
+        }
+        function replayStopLiveDwell() {
+            if (replayLiveDwellTimer) { clearInterval(replayLiveDwellTimer); replayLiveDwellTimer = null; }
+        }
+        function replayFetchLiveAircraft() {
+            fetch('/tar1090-data/aircraft.json')
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(data) {
+                    if (!data || !data.aircraft) return;
+                    var activeIcaos = new Set();
+                    var now = new Date();
+                    $timeText.textContent = now.toLocaleTimeString();
+                    for (var i = 0; i < data.aircraft.length; i++) {
+                        var ac = data.aircraft[i];
+                        if (!ac.lat || !ac.lon) continue;
+                        var icao = ac.hex;
+                        activeIcaos.add(icao);
+                        var acObj = { hex: icao, flight: (ac.flight || '').trim(), track: ac.track, alt_baro: ac.alt_baro, t: ac.t, category: ac.category };
+                        var pos = [ac.lat, ac.lon];
+                        if (replayMarkers[icao]) {
+                            replayMarkers[icao].marker.setLatLng(pos);
+                            replayMarkers[icao].marker.setIcon(createAircraftDivIcon(acObj));
+                            replayMarkers[icao].label.setLatLng(pos);
+                            replayMarkers[icao].label.setIcon(createAircraftLabel(acObj));
+                            replayMarkers[icao].data = acObj;
+                        } else {
+                            var marker = L.marker(pos, { icon: createAircraftDivIcon(acObj), interactive: true, zIndexOffset: 1000 }).addTo(replayMap);
+                            var label = L.marker(pos, { icon: createAircraftLabel(acObj), interactive: false, zIndexOffset: 999 }).addTo(replayMap);
+                            replayMarkers[icao] = { marker: marker, label: label, data: acObj, spd: ac.gs };
+                        }
+                        // Update trails
+                        if (replayShowTrails) {
+                            if (!replayPositions[icao]) replayPositions[icao] = [];
+                            var pts = replayPositions[icao];
+                            if (pts.length === 0 || getDistanceKm(pts[pts.length-1][0], pts[pts.length-1][1], ac.lat, ac.lon) > 0.05) {
+                                pts.push([ac.lat, ac.lon, ac.alt_baro || 0]);
+                                if (pts.length > TRAIL_MAX) pts.shift();
+                            }
+                            if (!replayTrails[icao]) replayTrails[icao] = L.layerGroup().addTo(replayMap);
+                            updateAltitudeTrail(icao, replayTrails[icao], replayPositions);
+                        }
+                    }
+                    // Fade stale aircraft
+                    Object.keys(replayMarkers).forEach(function(mIcao) {
+                        if (!activeIcaos.has(mIcao)) {
+                            var mEl = replayMarkers[mIcao].marker.getElement();
+                            var lEl = replayMarkers[mIcao].label.getElement();
+                            if (mEl) mEl.style.opacity = '0.3';
+                            if (lEl) lEl.style.opacity = '0.3';
+                        }
+                    });
+                    $acCount.textContent = activeIcaos.size + ' aircraft';
+                })
+                .catch(function() {});
         }
 
         function replayToggleTrails() {

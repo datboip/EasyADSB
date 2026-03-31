@@ -1754,29 +1754,26 @@ def cleanup_for_storage(min_free_mb=500):
     return False
 
 def get_stats():
-    """Get logging statistics."""
+    """Get logging statistics. Uses stats_summary for instant results."""
     conn = get_db()
     cursor = conn.cursor()
-    
-    # Total positions
-    cursor.execute('SELECT COUNT(*) FROM positions')
-    total_positions = cursor.fetchone()[0]
-    
-    # Unique aircraft (ICAO)
-    cursor.execute('SELECT COUNT(DISTINCT icao) FROM positions')
-    unique_aircraft = cursor.fetchone()[0]
-    
-    # Unique flights (callsigns)
-    cursor.execute('SELECT COUNT(DISTINCT callsign) FROM positions WHERE callsign IS NOT NULL')
-    unique_flights = cursor.fetchone()[0]
-    
-    # Date range
-    cursor.execute('SELECT MIN(timestamp), MAX(timestamp) FROM positions')
+
+    # Use pre-computed stats_summary (updated by background thread)
+    cursor.execute('SELECT total_positions, unique_aircraft, unique_callsigns, first_log, last_log FROM stats_summary WHERE id = 1')
     row = cursor.fetchone()
-    oldest = row[0] if row[0] else None
-    newest = row[1] if row[1] else None
-    
-    # Database size
+    if row:
+        total_positions = row['total_positions'] or 0
+        unique_aircraft = row['unique_aircraft'] or 0
+        unique_flights = row['unique_callsigns'] or 0
+        oldest = row['first_log']
+        newest = row['last_log']
+    else:
+        total_positions = 0
+        unique_aircraft = 0
+        unique_flights = 0
+        oldest = None
+        newest = None
+
     conn.close()
     
     db_size = 0
@@ -3799,11 +3796,12 @@ def api_system_stats():
     # Database size
     try:
         if os.path.exists(DB_PATH):
-            db_size = os.path.getsize(DB_PATH)
-            stats['db_size'] = round(db_size / (1024**2), 2)  # MB
+            db_bytes = os.path.getsize(DB_PATH)
+            stats['db_size'] = round(db_bytes / (1024**2), 2)  # MB
         else:
             stats['db_size'] = 0
-    except:
+    except Exception as e:
+        log.error(f"db_size error: {e}")
         stats['db_size'] = None
     
     # Storage warning if disk is getting full
@@ -3815,7 +3813,6 @@ def api_system_stats():
     
     # Version from VERSION file
     try:
-        import os
         version_path = os.path.join(os.path.dirname(__file__), "VERSION")
         if os.path.exists(version_path):
             with open(version_path, "r") as f:
@@ -4432,40 +4429,40 @@ def calculate_calendar():
     else:
         end_date = f"{year}-{month + 1:02d}-01"
 
-    # Get daily stats
-    cursor.execute('''
-        SELECT
-            date(timestamp) as date,
-            COUNT(*) as positions,
-            COUNT(DISTINCT icao) as unique_aircraft,
-            COUNT(DISTINCT strftime('%H', timestamp)) as active_hours
-        FROM positions
-        WHERE date(timestamp) >= ? AND date(timestamp) < ?
-        GROUP BY date(timestamp)
-        ORDER BY date
-    ''', (start_date, end_date))
-    daily_rows = cursor.fetchall()
-
-    # Get ALL hourly data in ONE query
-    cursor.execute('''
-        SELECT date(timestamp) as date, strftime('%H', timestamp) as hour, COUNT(*) as count
-        FROM positions
-        WHERE date(timestamp) >= ? AND date(timestamp) < ?
-        GROUP BY date(timestamp), strftime('%H', timestamp)
-    ''', (start_date, end_date))
-
-    hourly_by_date = {}
-    for r in cursor.fetchall():
-        date_str = r['date']
-        if date_str not in hourly_by_date:
-            hourly_by_date[date_str] = {}
-        hourly_by_date[date_str][int(r['hour'])] = r['count']
-
-    # Build calendar data
+    # Get daily stats using timestamp ranges (avoids date() full table scan)
+    # Iterate each day of the month with index-friendly WHERE clauses
+    from datetime import datetime as dt_cls
     calendar_days = []
-    for row in daily_rows:
-        date_str = row['date']
-        active_hours = row['active_hours']
+    hourly_by_date = {}
+
+    d = dt_cls.strptime(start_date, '%Y-%m-%d')
+    end_d = dt_cls.strptime(end_date, '%Y-%m-%d')
+    while d < end_d and d <= dt_cls.now():
+        day_start = d.strftime('%Y-%m-%d 00:00:00')
+        day_end = d.strftime('%Y-%m-%d 23:59:59')
+        date_str = d.strftime('%Y-%m-%d')
+
+        # Count positions and unique aircraft for this day
+        cursor.execute('SELECT COUNT(*) as positions, COUNT(DISTINCT icao) as unique_aircraft FROM positions WHERE timestamp >= ? AND timestamp <= ?', (day_start, day_end))
+        row = cursor.fetchone()
+        positions = row['positions']
+        unique_aircraft = row['unique_aircraft']
+
+        if positions == 0:
+            d += timedelta(days=1)
+            continue
+
+        # Get hourly breakdown for this day
+        hourly_data = {}
+        active_hours = 0
+        cursor.execute('''
+            SELECT CAST(strftime('%H', timestamp) AS INTEGER) as hour, COUNT(*) as count
+            FROM positions WHERE timestamp >= ? AND timestamp <= ?
+            GROUP BY CAST(strftime('%H', timestamp) AS INTEGER)
+        ''', (day_start, day_end))
+        for hr in cursor.fetchall():
+            hourly_data[hr['hour']] = hr['count']
+            active_hours += 1
 
         if active_hours >= 18:
             status = 'full'
@@ -4476,7 +4473,7 @@ def calculate_calendar():
         else:
             status = 'offline'
 
-        hourly_data = hourly_by_date.get(date_str, {})
+        hourly_by_date[date_str] = hourly_data
         gaps = []
         gap_start = None
         for hour in range(6, 22):
@@ -4496,12 +4493,13 @@ def calculate_calendar():
 
         calendar_days.append({
             'date': date_str,
-            'positions': row['positions'],
-            'unique_aircraft': row['unique_aircraft'],
+            'positions': positions,
+            'unique_aircraft': unique_aircraft,
             'active_hours': active_hours,
             'status': status,
             'gaps': gaps
         })
+        d += timedelta(days=1)
 
     # Calculate streaks
     all_dates = [d['date'] for d in calendar_days]
@@ -5121,7 +5119,7 @@ def api_replay_frames_since():
 
 if __name__ == '__main__':
     log.info("=" * 60)
-    log.info("EasyADSB Flight Logger v1.4.0")
+    log.info("EasyADSB Flight Logger v1.4.1")
     log.info("=" * 60)
     log.info(f"Ultrafeeder: {ULTRAFEEDER_HOST}:{ULTRAFEEDER_PORT}")
     log.info(f"Interval: {LOG_INTERVAL} seconds")
