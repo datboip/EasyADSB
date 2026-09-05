@@ -3168,6 +3168,9 @@ def api_stats_heatmap():
     resolution = float(request.args.get('resolution', 0.005))  # ~500m grid
     type_filter = request.args.get('type', 'all')
 
+    # Pre-compute cutoff timestamp for index-friendly query
+    cutoff = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
+
     # Build query based on filter type
     # Using ROUND to bin positions into grid cells
     base_query = '''
@@ -3176,10 +3179,10 @@ def api_stats_heatmap():
             ROUND(lon / ?) * ? as grid_lon,
             COUNT(*) as count
         FROM positions
-        WHERE timestamp >= datetime('now', '-' || ? || ' days')
+        WHERE timestamp >= ?
           AND lat IS NOT NULL AND lon IS NOT NULL
     '''
-    params = [resolution, resolution, resolution, resolution, days]
+    params = [resolution, resolution, resolution, resolution, cutoff]
 
     # Add type filter if specified
     if type_filter == 'helicopter':
