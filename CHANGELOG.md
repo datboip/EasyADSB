@@ -5,6 +5,59 @@ All notable changes to EasyADSB will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2026-09-05
+
+### Fixed
+
+- **Live map tiles**: CARTO discontinued free anonymous access to their basemap CDN, which had started showing an "API KEY REQUIRED" watermark over the Dark/Light/Voyager map styles. Replaced with Esri's free Canvas basemaps (`World_Dark_Gray_Base`/`World_Light_Gray_Base` + a labels reference layer for Dark/Light, `World_Street_Map` for Voyager) — same no-key ArcGIS service already used for Satellite/Terrain
+- **False "update available" notice**: the version-compare function split versions on `.` and ran them through `Number()`, so a pre-release suffix like `"1.4.3-beta"` silently parsed as `"1.4.0"` — making the dashboard think an older release (`1.4.2`) was newer. Comparison now separates the numeric core from any `-tag` suffix before comparing
+- **Dashboard reachable by hostname**, not just IP (e.g. `http://raspberrypi.local:8081`) — nginx now uses `listen 80 default_server;` / `server_name _;` as a proper catch-all instead of `server_name localhost;`. *Suggested by [@vesatikkanen](https://github.com/vesatikkanen) in [#1](https://github.com/datboip/EasyADSB/pull/1)*
+- **Settings dropdowns** (poll interval / retention) no longer get stuck showing a "Loading..." placeholder option after config loads
+- **Heatmap query** no longer full-scans the positions table on large databases — cutoff timestamp is computed once in Python and passed as a literal instead of wrapping `timestamp` in a SQL function, restoring index usage
+
+### Added
+
+- **Trail gap detection**: live map, replay, and live-dwell trails now break and reset after a >5 minute gap between position updates (aircraft went out of range and came back)
+- **Trail glitch filtering**: a new trail point is skipped if it implies >900kt groundspeed from the previous one, filtering GPS jump artifacts
+
+## [1.4.2] - 2026-03-31
+
+### Performance
+
+- **Dashboard loads instantly** — stats now use pre-computed summary table instead of scanning millions of rows
+- **Calendar cache** builds in ~75s instead of hanging indefinitely
+- **System Health** database size displays correctly (was showing N/A)
+
+### Fixed
+
+- **Live dwell** now shows real-time aircraft during the 15s hold — fetches directly from aircraft.json for smooth 2s updates
+- Fixed timing bug where loop would skip all frames after dwell
+- Poll timer cleanup and race condition guards
+- **Scrubber bar** redesigned — thinner, tighter to controls, wider thumb for touch screens
+- **Collapsible sections** properly respect saved state across refreshes
+- **Feed Status** summary pills correctly hidden when section is expanded
+- **Station IDs** section starts collapsed by default
+- **Version strings** updated across all files (title, footer, API)
+
+### Security
+
+- Removed hardcoded receiver coordinates from map fallback defaults
+- Generic US center used as fallback until receiver.json loads
+
+## [1.4.1] - 2026-03-23
+
+### Added
+
+- **Replay Live Loop Mode**: weather-radar style view that plays the last few hours of aircraft history, dwells on live for 15 seconds, then loops back (`?replay=true&live=true&hours=3`)
+- **Time Range Presets**: quick 1h / 3h / 6h buttons in the replay controls with auto-speed scaling
+- **KML Export**: export any replay session as KML for Google Earth — client-side generation, no server load, includes 3D flight tracks with altitude
+- **Privacy Toggle**: hide your receiver location dot from the map, persists across sessions via localStorage
+- **New API Endpoint**: `/api/replay/frames/since?after=UNIX_TS&bucket=30` — incremental frame polling for live mode, 24h max lookback to protect Pi performance
+
+### Changed
+
+- Slimmed README — detailed docs moved to `docs/` folder (API reference, advanced setup, troubleshooting, configuration)
+
 ## [1.3.3] - 2026-01-24
 
 ### Added

@@ -6173,14 +6173,21 @@
 
         // Compare semantic versions: returns 1 if a > b, -1 if a < b, 0 if equal
         function compareVersions(a, b) {
-            const pa = a.split('.').map(Number);
-            const pb = b.split('.').map(Number);
+            // Strip pre-release suffix (e.g. "1.4.3-beta" -> core "1.4.3", tag "beta")
+            // so it doesn't get mangled by Number() during the numeric compare below
+            const [coreA, preA] = a.split('-');
+            const [coreB, preB] = b.split('-');
+            const pa = coreA.split('.').map(Number);
+            const pb = coreB.split('.').map(Number);
             for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
                 const na = pa[i] || 0;
                 const nb = pb[i] || 0;
                 if (na > nb) return 1;
                 if (na < nb) return -1;
             }
+            // Same numeric core: a pre-release is older than the matching full release
+            if (preA && !preB) return -1;
+            if (!preA && preB) return 1;
             return 0;
         }
 
@@ -6430,8 +6437,20 @@
                 // Update settings dropdowns (in Settings section)
                 const intervalEl = document.getElementById('settings-interval');
                 const retentionEl = document.getElementById('settings-retention');
-                if (intervalEl) intervalEl.value = stats.interval;
-                if (retentionEl) retentionEl.value = stats.retention_days;
+                if (intervalEl) {
+                    var loadOpt = intervalEl.querySelector('option[value=""]');
+                    if (loadOpt) loadOpt.remove();
+                    intervalEl.value = stats.interval;
+                    intervalEl.disabled = false;
+                    intervalEl.style.opacity = '1';
+                }
+                if (retentionEl) {
+                    var loadOpt2 = retentionEl.querySelector('option[value=""]');
+                    if (loadOpt2) loadOpt2.remove();
+                    retentionEl.value = stats.retention_days;
+                    retentionEl.disabled = false;
+                    retentionEl.style.opacity = '1';
+                }
                 
                 // Update storage bar
                 const usedMB = stats.storage_mb;
@@ -6892,6 +6911,10 @@
                 const response = await fetch(`${LOGGER_URL}/api/settings`);
                 if (response.ok) {
                     const config = await response.json();
+                    // Remove "Loading..." placeholder options
+                    if (intervalEl.querySelector('option[value=""]')) intervalEl.querySelector('option[value=""]').remove();
+                    if (retentionEl.querySelector('option[value=""]')) retentionEl.querySelector('option[value=""]').remove();
+
                     intervalEl.value = config.interval || 10;
                     retentionEl.value = config.retention_days || 30;
 
@@ -7182,19 +7205,28 @@
             liveMap.attributionControl.setPrefix('');
 
             // Define all available tile layers
-            const cartoAttr = '© <a href="https://carto.com/">CARTO</a> © <a href="https://www.openstreetmap.org/copyright">OSM</a>';
             const esriAttr = '© <a href="https://www.esri.com/">Esri</a>';
             const osmAttr = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
             mapTileLayers = {
-                'carto-dark': L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 19, subdomains: 'abcd', attribution: cartoAttr
-                }),
-                'carto-light': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 19, subdomains: 'abcd', attribution: cartoAttr
-                }),
-                'carto-voyager': L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 19, subdomains: 'abcd', attribution: cartoAttr
+                'carto-dark': L.layerGroup([
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 19, maxNativeZoom: 16, attribution: esriAttr
+                    }),
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 19, maxNativeZoom: 16
+                    })
+                ]),
+                'carto-light': L.layerGroup([
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 19, maxNativeZoom: 16, attribution: esriAttr
+                    }),
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 19, maxNativeZoom: 16
+                    })
+                ]),
+                'carto-voyager': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                    maxZoom: 19, attribution: esriAttr
                 }),
                 'esri-satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
                     maxZoom: 19, attribution: esriAttr
@@ -7206,6 +7238,14 @@
                     maxZoom: 19, attribution: osmAttr
                 })
             };
+
+            // layerGroup has no bringToBack (Base+Reference pair for dark/light canvas); delegate to children
+            ['carto-dark', 'carto-light'].forEach(key => {
+                mapTileLayers[key].bringToBack = function() {
+                    this.eachLayer(l => l.bringToBack());
+                    return this;
+                };
+            });
 
             // Set initial style based on theme
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -7388,7 +7428,19 @@
                         // Always store position with altitude for trails (even when hidden)
                         if (!aircraftPositions[icao]) aircraftPositions[icao] = [];
                         const alt = ac.alt_baro || ac.alt_geom || 0;
-                        aircraftPositions[icao].push([pos[0], pos[1], alt]);
+                        const nowTs = Date.now() / 1000;
+                        // Break trail if >5 min gap (aircraft went out of range and came back)
+                        const livePos = aircraftPositions[icao];
+                        if (livePos.length > 0 && livePos[livePos.length-1][3] && (nowTs - livePos[livePos.length-1][3]) > 300) {
+                            livePos.length = 0;
+                            if (existing.trail) existing.trail.clearLayers();
+                        }
+                        // Skip implausible points (GPS glitches)
+                        if (livePos.length > 0 && !isTrailPointPlausible(livePos[livePos.length-1], pos[0], pos[1], nowTs)) {
+                            // skip
+                        } else {
+                            aircraftPositions[icao].push([pos[0], pos[1], alt, nowTs]);
+                        }
 
                         // Update trail if visible
                         if (existing.trail) {
@@ -7625,6 +7677,17 @@
                       Math.sin(dLon/2) * Math.sin(dLon/2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             return R * c;
+        }
+
+        // Check if a new trail point is plausible (not a GPS glitch)
+        // Returns false if implied speed > 900kt (~1670 km/h) — skip the point
+        function isTrailPointPlausible(prevPt, newLat, newLon, newTime) {
+            if (!prevPt || !prevPt[3] || !newTime) return true;
+            var dt = newTime - prevPt[3]; // seconds
+            if (dt <= 0) return true;
+            var dist = getDistanceKm(prevPt[0], prevPt[1], newLat, newLon);
+            var speedKmh = (dist / dt) * 3600;
+            return speedKmh < 1670; // ~900kt max
         }
 
         function toggleTrails() {
@@ -8253,10 +8316,15 @@
                 attributionControl: true
             });
             replayMap.attributionControl.setPrefix('EasyADSB Replay');
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                maxZoom: 19, subdomains: 'abcd',
-                attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
-            }).addTo(replayMap);
+            L.layerGroup([
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+                    maxZoom: 19, maxNativeZoom: 16,
+                    attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+                }),
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+                    maxZoom: 19, maxNativeZoom: 16
+                })
+            ]).addTo(replayMap);
 
             // Fetch receiver location
             fetch('/tar1090-data/receiver.json')
@@ -8854,12 +8922,22 @@
                     })(icao));
                 }
 
-                // Trail tracking
+                // Trail tracking (with gap detection + smoothing)
                 if (replayShowTrails) {
                     if (!replayPositions[icao]) replayPositions[icao] = [];
                     var pts = replayPositions[icao];
-                    if (pts.length === 0 || getDistanceKm(pts[pts.length-1][0], pts[pts.length-1][1], lat, lon) > 0.05) {
-                        pts.push([lat, lon, alt]);
+                    // Break trail if >5 min gap (different flight segment)
+                    if (pts.length > 0 && pts[pts.length-1][3] && (frame.t - pts[pts.length-1][3]) > 300) {
+                        pts.length = 0;
+                        if (replayTrails[icao]) {
+                            replayTrails[icao].clearLayers();
+                        }
+                    }
+                    // Skip implausible points (GPS glitches)
+                    if (pts.length > 0 && !isTrailPointPlausible(pts[pts.length-1], lat, lon, frame.t)) {
+                        // skip this point
+                    } else if (pts.length === 0 || getDistanceKm(pts[pts.length-1][0], pts[pts.length-1][1], lat, lon) > 0.05) {
+                        pts.push([lat, lon, alt, frame.t]);
                         if (pts.length > TRAIL_MAX) pts.shift();
                     }
                     if (!replayTrails[icao]) {
@@ -9104,12 +9182,19 @@
                             var label = L.marker(pos, { icon: createAircraftLabel(acObj), interactive: false, zIndexOffset: 999 }).addTo(replayMap);
                             replayMarkers[icao] = { marker: marker, label: label, data: acObj, spd: ac.gs };
                         }
-                        // Update trails
+                        // Update trails (with gap detection + smoothing)
                         if (replayShowTrails) {
                             if (!replayPositions[icao]) replayPositions[icao] = [];
                             var pts = replayPositions[icao];
-                            if (pts.length === 0 || getDistanceKm(pts[pts.length-1][0], pts[pts.length-1][1], ac.lat, ac.lon) > 0.05) {
-                                pts.push([ac.lat, ac.lon, ac.alt_baro || 0]);
+                            var dwellTs = Date.now() / 1000;
+                            if (pts.length > 0 && pts[pts.length-1][3] && (dwellTs - pts[pts.length-1][3]) > 300) {
+                                pts.length = 0;
+                                if (replayTrails[icao]) replayTrails[icao].clearLayers();
+                            }
+                            if (pts.length > 0 && !isTrailPointPlausible(pts[pts.length-1], ac.lat, ac.lon, dwellTs)) {
+                                // skip glitch
+                            } else if (pts.length === 0 || getDistanceKm(pts[pts.length-1][0], pts[pts.length-1][1], ac.lat, ac.lon) > 0.05) {
+                                pts.push([ac.lat, ac.lon, ac.alt_baro || 0, dwellTs]);
                                 if (pts.length > TRAIL_MAX) pts.shift();
                             }
                             if (!replayTrails[icao]) replayTrails[icao] = L.layerGroup().addTo(replayMap);
