@@ -14,7 +14,7 @@
 
 | Container | Purpose |
 |-----------|---------|
-| ultrafeeder | ADS-B decoder, aggregator, tar1090, feeds ADSBx/ADSB.lol/FR24 |
+| ultrafeeder | ADS-B decoder, aggregator, tar1090, feeds ADSBx/ADSB.lol/FR24/TheAirTraffic |
 | radarbox | RadarBox feeder |
 | piaware | FlightAware feeder |
 | flightradar24 | FlightRadar24 feeder |
@@ -26,6 +26,7 @@
 ```
 RTL-SDR → ultrafeeder (decode) → ADSBexchange
                                 → ADSB.lol + MLAT
+                                → TheAirTraffic + MLAT
                                 → FlightRadar24
                                 → tar1090 (local map)
 
