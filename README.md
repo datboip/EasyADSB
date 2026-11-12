@@ -2,13 +2,13 @@
 
 **Turn a Raspberry Pi into a multi-feed ADS-B tracker in minutes.**
 
-One command. Six flight networks. A dashboard you'll actually want to look at.
+One command. Seven flight networks. A dashboard you'll actually want to look at.
 
 ![EasyADSB Dashboard](screenshots/dashboard-hero.png)
 
 ## What It Does
 
-EasyADSB sets up your Raspberry Pi + RTL-SDR dongle to feed aircraft data to **six tracking networks** simultaneously — with a custom dashboard for monitoring everything.
+EasyADSB sets up your Raspberry Pi + RTL-SDR dongle to feed aircraft data to **seven tracking networks** simultaneously — with a custom dashboard for monitoring everything.
 
 | Network | Type |
 |---------|------|
@@ -17,6 +17,7 @@ EasyADSB sets up your Raspberry Pi + RTL-SDR dongle to feed aircraft data to **s
 | FlightAware | Commercial flight tracker |
 | FlightRadar24 | Worldwide tracker |
 | RadarBox | Aviation data platform |
+| TheAirTraffic | Community flight tracking network |
 | tar1090 | Your own local map |
 
 ## Quick Start
@@ -72,7 +73,7 @@ http://<your-pi-ip>:8081/?replay=true&live=true&hours=3
 </p>
 
 ### Feed Status & Management
-Live indicators for all six services. Collapsible cards, direct links to your stats, one-click backup from the dashboard.
+Live indicators for all seven services. Collapsible cards, direct links to your stats, one-click backup from the dashboard.
 
 ![Feed Status](screenshots/dashboard-feed-collapsed.png)
 

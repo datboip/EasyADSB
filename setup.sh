@@ -2118,7 +2118,7 @@ RADARBOX_KEY=$RADARBOX_KEY
 RADARBOX_SERIAL=$RADARBOX_SERIAL
 PIAWARE_FEEDER_ID=$PIAWARE_FEEDER_ID
 
-ULTRAFEEDER_CONFIG=adsb,feed.flightradar24.com,30004,beast_reduce_plus_out,uuid=${FR24KEY};adsb,feed.adsbexchange.com,30004,beast_reduce_plus_out,uuid=${ADSBX_UUID};adsb,in.adsb.lol,30004,beast_reduce_plus_out;adsb,feed.adsb.fi,30004,beast_reduce_plus_out;adsb,feed.planespotters.net,30004,beast_reduce_plus_out;mlat,feed.adsbexchange.com,31090,39008,uuid=${ADSBX_UUID};mlat,in.adsb.lol,31090,39008,uuid=${MULTIFEEDER_UUID};mlat,feed.adsb.fi,31090,39008;mlat,mlat.planespotters.net,31090,39008
+ULTRAFEEDER_CONFIG=adsb,feed.flightradar24.com,30004,beast_reduce_plus_out,uuid=${FR24KEY};adsb,feed.adsbexchange.com,30004,beast_reduce_plus_out,uuid=${ADSBX_UUID};adsb,in.adsb.lol,30004,beast_reduce_plus_out;adsb,feed.adsb.fi,30004,beast_reduce_plus_out;adsb,feed.planespotters.net,30004,beast_reduce_plus_out;adsb,feed.theairtraffic.com,30004,beast_reduce_plus_out;mlat,feed.adsbexchange.com,31090,39008,uuid=${ADSBX_UUID};mlat,in.adsb.lol,31090,39008,uuid=${MULTIFEEDER_UUID};mlat,feed.adsb.fi,31090,39008;mlat,mlat.planespotters.net,31090,39008;mlat,feed.theairtraffic.com,31090
 
 # Port Configuration
 DASHBOARD_PORT=$DASHBOARD_PORT
@@ -2297,6 +2297,7 @@ JSEOF
     echo "    • https://www.adsbexchange.com/myip/"
     echo "    • https://adsb.lol/"
     echo "    • https://flightaware.com/adsb/stats/"
+    echo "    • https://theairtraffic.com/myip"
     echo ""
     echo "  📊 Check if everything is working:"
     echo "    docker compose ps"
