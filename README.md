@@ -73,7 +73,7 @@ http://<your-pi-ip>:8081/?replay=true&live=true&hours=3
 </p>
 
 ### Feed Status & Management
-Live indicators for all six services. Collapsible cards, direct links to your stats, one-click backup from the dashboard.
+Live indicators for all seven services. Collapsible cards, direct links to your stats, one-click backup from the dashboard.
 
 ![Feed Status](screenshots/dashboard-feed-collapsed.png)
 
